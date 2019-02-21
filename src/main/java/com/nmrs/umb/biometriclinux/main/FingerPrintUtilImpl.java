@@ -9,8 +9,10 @@ import SecuGen.FDxSDKPro.jni.JSGFPLib;
 import SecuGen.FDxSDKPro.jni.SGDeviceInfoParam;
 import SecuGen.FDxSDKPro.jni.SGFDxDeviceName;
 import SecuGen.FDxSDKPro.jni.SGFDxErrorCode;
+import SecuGen.FDxSDKPro.jni.SGFDxSecurityLevel;
 import SecuGen.FDxSDKPro.jni.SGFDxTemplateFormat;
 import SecuGen.FDxSDKPro.jni.SGFingerInfo;
+import SecuGen.FDxSDKPro.jni.SGISOTemplateInfo;
 import SecuGen.FDxSDKPro.jni.SGImpressionType;
 import ch.qos.logback.core.Context;
 import com.nmrs.umb.biometriclinux.models.AppModel;
@@ -58,38 +60,48 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
                 long erorCode = jsgFPLib.GetImageEx(imageBuffer1, 10000, 0, 50);
                 if (erorCode == SGFDxErrorCode.SGFDX_ERROR_NONE) {
 
-                    //convertBytetoImage(img1gray);
-                    long ret2 = jsgFPLib.GetImageQuality(deviceInfo.imageWidth, deviceInfo.imageHeight, imageBuffer1, qualityArray);
+                    return captureFingerPrint(bufferedImage, imageBuffer1, fingerPosition, err, populateImagebytes);
+//                    //convertBytetoImage(img1gray);
+//                    long ret2 = jsgFPLib.GetImageQuality(deviceInfo.imageWidth, deviceInfo.imageHeight, imageBuffer1, qualityArray);
+//
+//                    quality = qualityArray[0];
+//
+//                    SGFingerInfo fingerInfo = new SGFingerInfo();
+//                    fingerInfo.FingerNumber = fingerPosition;
+//                    fingerInfo.ImageQuality = quality;
+//                    fingerInfo.ImpressionType = SGImpressionType.SG_IMPTYPE_LP;
+//                    fingerInfo.ViewNumber = 1;
+//
+//                    jsgFPLib.CreateTemplate(fingerInfo, imageBuffer1, imageTemplate);
+//
+//                    fingerPrintInfo.setImageHeight(deviceInfo.imageHeight);
+//                    fingerPrintInfo.setImageWidth(deviceInfo.imageWidth);
+//                    fingerPrintInfo.setImageQuality(quality);
+//                    fingerPrintInfo.setDateCreated(new Date());
+//                    fingerPrintInfo.setImage(convertBytetoImage(bufferedImage));
+//                    fingerPrintInfo.setImageByte((populateImagebytes) ? imageBuffer1 : null);
+//                    if (fingerPosition != 0) {
+//                        //Java Enum is zero-based
+//                        fingerPrintInfo.setFingerPositions(AppModel.FingerPositions.values()[fingerPosition - 1]);
+//                    } else {
+//                        fingerPrintInfo.setFingerPositions(AppModel.FingerPositions.values()[fingerPosition]);
+//                    }
+//
+//                    fingerPrintInfo.setTemplate(Base64.getEncoder().encodeToString(imageTemplate));
+//                    fingerPrintInfo.setImageDPI(deviceInfo.imageDPI);
+//                    fingerPrintInfo.setErrorMessage(err);
+//
+//                    //  nfiqvalue = jsgFPLib.ComputeNFIQ(imageBuffer1, deviceInfo.imageWidth, deviceInfo.imageHeight);
+//                    return fingerPrintInfo;
+                } else {
+                    if (jsgFPLib.OpenDevice(SGFDxDeviceName.SG_DEV_AUTO) == SGFDxErrorCode.SGFDX_ERROR_NONE) {
+                        jsgFPLib.GetDeviceInfo(deviceInfo);
 
-                    quality = qualityArray[0];
-
-                    SGFingerInfo fingerInfo = new SGFingerInfo();
-                    fingerInfo.FingerNumber = fingerPosition;
-                    fingerInfo.ImageQuality = quality;
-                    fingerInfo.ImpressionType = SGImpressionType.SG_IMPTYPE_LP;
-                    fingerInfo.ViewNumber = 1;
-
-                    jsgFPLib.CreateTemplate(fingerInfo, imageBuffer1, imageTemplate);
-
-                    fingerPrintInfo.setImageHeight(deviceInfo.imageHeight);
-                    fingerPrintInfo.setImageWidth(deviceInfo.imageWidth);
-                    fingerPrintInfo.setImageQuality(quality);
-                    fingerPrintInfo.setDateCreated(new Date());
-                    fingerPrintInfo.setImage(convertBytetoImage(bufferedImage));
-                    fingerPrintInfo.setImageByte((populateImagebytes) ? imageBuffer1 : null);
-                    if (fingerPosition != 0) {
-                        fingerPrintInfo.setFingerPositions(AppModel.FingerPositions.values()[fingerPosition - 1]);
-                    } else {
-                        fingerPrintInfo.setFingerPositions(AppModel.FingerPositions.values()[fingerPosition]);
+                        logger.log(Logger.Level.INFO, "Device opened successfully");
+                        isDeviceOpen = true;
+                        long erorCode2 = jsgFPLib.GetImageEx(imageBuffer1, 10000, 0, 50);
+                         return captureFingerPrint(bufferedImage, imageBuffer1, fingerPosition, err, populateImagebytes);
                     }
-
-                    fingerPrintInfo.setTemplate(Base64.getEncoder().encodeToString(imageTemplate));
-                    fingerPrintInfo.setImageDPI(deviceInfo.imageDPI);
-                    fingerPrintInfo.setErrorMessage(err);
-
-                  //  nfiqvalue = jsgFPLib.ComputeNFIQ(imageBuffer1, deviceInfo.imageWidth, deviceInfo.imageHeight);
-
-                    return fingerPrintInfo;
                 }
             }
         } catch (Exception ex) {
@@ -99,9 +111,67 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
 
     }
 
+    private FingerPrintInfo captureFingerPrint(BufferedImage bufferedImage, byte[] imageBuffer1, int fingerPosition, String err, boolean populateImagebytes) {
+
+        FingerPrintInfo fingerPrintInfo = new FingerPrintInfo();
+        try {
+            int[] qualityArray = new int[1];
+            int quality = 0;
+            long nfiqvalue;
+
+            long ret2 = jsgFPLib.GetImageQuality(deviceInfo.imageWidth, deviceInfo.imageHeight, imageBuffer1, qualityArray);
+
+            quality = qualityArray[0];
+
+            SGFingerInfo fingerInfo = new SGFingerInfo();
+            fingerInfo.FingerNumber = fingerPosition;
+            fingerInfo.ImageQuality = quality;
+            fingerInfo.ImpressionType = SGImpressionType.SG_IMPTYPE_LP;
+            fingerInfo.ViewNumber = 1;
+
+            jsgFPLib.CreateTemplate(fingerInfo, imageBuffer1, imageTemplate);
+
+            fingerPrintInfo.setImageHeight(deviceInfo.imageHeight);
+            fingerPrintInfo.setImageWidth(deviceInfo.imageWidth);
+            fingerPrintInfo.setImageQuality(quality);
+            fingerPrintInfo.setDateCreated(new Date());
+            fingerPrintInfo.setImage(convertBytetoImage(bufferedImage));
+            fingerPrintInfo.setImageByte((populateImagebytes) ? imageBuffer1 : null);
+            if (fingerPosition != 0) {
+                //Java Enum is zero-based
+                fingerPrintInfo.setFingerPositions(AppModel.FingerPositions.values()[fingerPosition - 1]);
+            } else {
+                fingerPrintInfo.setFingerPositions(AppModel.FingerPositions.values()[fingerPosition]);
+            }
+
+            fingerPrintInfo.setTemplate(Base64.getEncoder().encodeToString(imageTemplate));
+            fingerPrintInfo.setImageDPI(deviceInfo.imageDPI);
+            fingerPrintInfo.setErrorMessage(err);
+
+            //  nfiqvalue = jsgFPLib.ComputeNFIQ(imageBuffer1, deviceInfo.imageWidth, deviceInfo.imageHeight);
+            return fingerPrintInfo;
+        } catch (Exception ex) {
+        }
+        return null;
+    }
+
     @Override
     public int verify(FingerPrintMatchInputModel input) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        int matchedRecord = 0;
+        boolean[] matched = new boolean[1];
+        byte[] unknownTemplateArray = Base64.getDecoder().decode(input.getFingerPrintTemplate());
+        SGISOTemplateInfo sample_info = new SGISOTemplateInfo();
+
+        for (FingerPrintInfo each : input.getFingerPrintTemplateListToMatch()) {
+            byte[] fingerTemplate = Base64.getDecoder().decode(each.getTemplate());
+            if (jsgFPLib.MatchTemplate(fingerTemplate, unknownTemplateArray, SGFDxSecurityLevel.SL_NORMAL, matched) == SGFDxErrorCode.SGFDX_ERROR_NONE) {
+                if (matched[0]) {
+                    matchedRecord = each.getPatienId();
+                    break;
+                }
+            }
+        }
+        return matchedRecord;
     }
 
     private void initializeDevice() {
@@ -116,7 +186,7 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
                 jsgFPLib.GetDeviceInfo(deviceInfo);
 
                 logger.log(Logger.Level.INFO, "Device opened successfully");
-                jsgFPLib.SetTemplateFormat(SGFDxTemplateFormat.TEMPLATE_FORMAT_ISO19794);
+                //jsgFPLib.SetTemplateFormat(SGFDxTemplateFormat.TEMPLATE_FORMAT_ISO19794);
                 isDeviceOpen = true;
 
             }
@@ -137,7 +207,7 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
             ImageIO.write(bImage2, "bmp", outputStream);
 
             String base64Str = Base64.getEncoder().encodeToString(outputStream.toByteArray());
-            System.out.println(base64Str);
+            //System.out.println(base64Str);
 
             outputStream.close();
 

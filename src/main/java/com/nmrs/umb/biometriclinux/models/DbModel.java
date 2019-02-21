@@ -11,8 +11,61 @@ package com.nmrs.umb.biometriclinux.models;
  */
 public class DbModel {
     
-    public String database;
-    public String username;
-    public String password;
+    private String databaseServer;
+    private String username;
+    private String password;
+    private String port;
+    private String dBName;
+    private String dbPort;
+
+    public String getDatabaseServer() {
+        return databaseServer;
+    }
+
+    public void setDatabaseServer(String databaseServer) {
+        this.databaseServer = databaseServer;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
+    public String getPort() {
+        return port;
+    }
+
+    public void setPort(String port) {
+        this.port = port;
+    }
+
+    public String getdBName() {
+        return dBName;
+    }
+
+    public void setdBName(String dBName) {
+        this.dBName = dBName;
+    }
+
+    public String getDbPort() {
+        return dbPort;
+    }
+
+    public void setDbPort(String dbPort) {
+        this.dbPort = dbPort;
+    }
+    
+    
     
 }

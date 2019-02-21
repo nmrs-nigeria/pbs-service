@@ -11,8 +11,9 @@
     <groupId>com.nmrs.umb</groupId>
     <artifactId>biometric-linux</artifactId>
     <version>0.0.1-SNAPSHOT</version>
+    <packaging>jar</packaging>
     <name>biometric-linux</name>
-    <description>Demo project for Spring Boot</description>
+    <description>NMRS Fingerprint biometric service</description>
 
     <properties>
         <java.version>1.8</java.version>
@@ -52,8 +53,12 @@
     </dependencies>
 
     <build>
+        <finalName>nmrs-biometric</finalName>
         <plugins>
             <plugin>
+                <configuration>
+                    <executable>true</executable>
+                </configuration>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>

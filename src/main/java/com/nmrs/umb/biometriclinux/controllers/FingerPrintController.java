@@ -6,8 +6,10 @@
 package com.nmrs.umb.biometriclinux.controllers;
 
 import com.nmrs.umb.biometriclinux.dal.DbManager;
+import com.nmrs.umb.biometriclinux.main.AppUtil;
 import com.nmrs.umb.biometriclinux.main.FingerPrintUtilImpl;
 import com.nmrs.umb.biometriclinux.models.AppModel;
+import com.nmrs.umb.biometriclinux.models.DbModel;
 import com.nmrs.umb.biometriclinux.models.FingerPrintInfo;
 import com.nmrs.umb.biometriclinux.models.ResponseModel;
 import com.nmrs.umb.biometriclinux.models.SaveModel;
@@ -15,9 +17,13 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import org.jboss.logging.Logger;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -28,6 +34,11 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 public class FingerPrintController {
+
+    Logger logger = Logger.getLogger(FingerPrintController.class);
+
+    @Autowired
+    private Environment env;
 
     FingerPrintUtilImpl fingerPrintUtilImpl = new FingerPrintUtilImpl();
     FingerPrintInfo responseObject = null;
@@ -44,50 +55,62 @@ public class FingerPrintController {
     }
 
     @RequestMapping(value = "api/FingerPrint/CheckForPreviousCapture")
-    public ResponseEntity<?> CheckForPreviousCapture(String PatientUUID) {
+    public ResponseEntity<?> CheckForPreviousCapture(@RequestParam String PatientUUID) {
         List<FingerPrintInfo> fingerPrint = new ArrayList<>();
+        if (Objects.isNull(PatientUUID) || PatientUUID.equals("undefined")) {
+            return new ResponseEntity("Invalid Patient Id", HttpStatus.BAD_REQUEST);
+        }
         try {
-            dbManager = new DbManager();
-            Map<String, String> patientInfo = dbManager.RetrievePatientIdByUUID(PatientUUID);
+            DbModel dbModel = AppUtil.getDatabaseSource(env);
+            dbManager = new DbManager(dbModel);
+            dbManager.openConnection();
+            Map<String, String> patientInfo = dbManager.RetrievePatientIdAndNameByUUID(PatientUUID);
 
             if (patientInfo != null) {
                 fingerPrint = dbManager.GetPatientBiometricinfo(Integer.parseInt(patientInfo.get("person_id")));
+                dbManager.closeConnection();
                 return new ResponseEntity<>(fingerPrint, HttpStatus.OK);
             }
 
-        } catch (NumberFormatException | SQLException ex) {
+        } catch (NumberFormatException | SQLException | ClassNotFoundException ex) {
+            logger.log(Logger.Level.FATAL, ex.getMessage());
             return new ResponseEntity(HttpStatus.BAD_REQUEST);
         }
         return null;
     }
 
-     @RequestMapping(value = "api/FingerPrint/SaveToDatabase")
-    public ResponseEntity<?> SaveToDatabase(SaveModel model) {
-        dbManager = new DbManager();
+    @RequestMapping(value = "api/FingerPrint/SaveToDatabase")
+    public ResponseEntity<?> SaveToDatabase(@RequestBody SaveModel model) {
+        DbModel dbModel = AppUtil.getDatabaseSource(env);
+        dbManager = new DbManager(dbModel);
         List<FingerPrintInfo> fingerPrint = new ArrayList<>();
         ResponseModel responseModel = new ResponseModel();
 
         try {
             String patientUUID = model.PatientUUID;
-            Map<String, String> patientInfo = dbManager.RetrievePatientIdByUUID(patientUUID);
+            dbManager.openConnection();
+            Map<String, String> patientInfo = dbManager.RetrievePatientIdAndNameByUUID(patientUUID);
             if (patientInfo != null) {
                 int pid = Integer.parseInt(patientInfo.get("person_id"));
-                model.FingerPrintList.stream().forEach(a -> {
-                    a.PatienId = pid;
+                model.getFingerPrintList().stream().forEach(a -> {
+                    a.setPatienId(pid);
+                    fingerPrint.add(a);
                 });
 
                 responseModel = dbManager.SaveToDatabase(fingerPrint);
+                dbManager.closeConnection();
                 return new ResponseEntity<>(responseModel, HttpStatus.OK);
 
             } else {
 
                 responseModel.setErrorMessage("Invalid patientId supplied");
                 responseModel.setIsSuccessful(false);
+                dbManager.closeConnection();
                 return new ResponseEntity<>(responseModel, HttpStatus.BAD_REQUEST);
             }
 
         } catch (Exception ex) {
-            responseModel.setErrorMessage(ex.getMessage());
+            responseModel.setErrorMessage("Error occurrd while performing your request");
             responseModel.setIsSuccessful(false);
             return new ResponseEntity<>(responseModel, HttpStatus.BAD_REQUEST);
         }
