@@ -135,7 +135,7 @@ public class DbManager {
     public void Save(FingerPrintInfo fingerPrint) throws SQLException {
         //String insertSQL = String.format();
         // insertSQL += String.format(fingerPrint.FingerPositions, fingerPrint.SerialNumber, fingerPrint.Model, fingerPrint.Manufacturer, fingerPrint.Creator);
-        ppStatement = conn.prepareStatement("insert into biometricInfo(patient_Id, template, imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, manufacturer, creator, date_created)Values(?,?,?,?,?,?,?,?,?,?,?,NOW())");
+        ppStatement = conn.prepareStatement("insert into "+TABLENAME+"(patient_Id, template, imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, manufacturer, creator, date_created)Values(?,?,?,?,?,?,?,?,?,?,?,NOW())");
         ppStatement.setInt(1, fingerPrint.getPatienId());
         ppStatement.setString(2, fingerPrint.getTemplate());
         ppStatement.setInt(3, fingerPrint.getImageWidth());
