@@ -40,7 +40,7 @@ public class DbManager {
     private String dbPassword = null;
     private String dbName = null;
     private String dbPort = null;
-    private final String TABLENAME = "biometricInfo";
+    private final String TABLENAME = "biometricinfo";
     
     public DbManager(DbModel dbModel) {
         this.server = dbModel.getDatabaseServer();
@@ -67,7 +67,7 @@ public class DbManager {
         //  DbManager dbManager = new DbManager();
         // openConnection();
         statement = conn.createStatement();
-        statement.execute("CREATE TABLE IF NOT EXISTS `biometricInfo` (`"
+        statement.execute("CREATE TABLE IF NOT EXISTS `biometricinfo` (`"
                 + "biometricInfo_Id` INT(11) NOT NULL AUTO_INCREMENT,"
                 + "`patient_Id` INT(11) NOT NULL,`template` TEXT NOT NULL,"
                 + "`imageWidth` INT(11) DEFAULT NULL,`imageHeight` INT(11) DEFAULT NULL,"
@@ -88,7 +88,7 @@ public class DbManager {
     public List<FingerPrintInfo> GetPatientBiometricinfo(int patientId) throws SQLException {
         
         if (patientId != 0) {
-            ppStatement = conn.prepareStatement("SELECT patient_id, template, imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, manufacturer, date_created, creator FROM biometricInfo where patient_id = ? ");
+            ppStatement = conn.prepareStatement("SELECT patient_id, template, imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, manufacturer, date_created, creator FROM "+TABLENAME+" where patient_id = ? ");
             ppStatement.setInt(1, patientId);
             resultSet = ppStatement.executeQuery();
             
