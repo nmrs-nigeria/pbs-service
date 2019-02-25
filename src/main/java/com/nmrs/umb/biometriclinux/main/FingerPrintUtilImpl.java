@@ -47,13 +47,8 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
             initializeDevice();
         }
 
-        FingerPrintInfo fingerPrintInfo = new FingerPrintInfo();
-
         try {
 
-            int[] qualityArray = new int[1];
-            int quality = 0;
-            long nfiqvalue;
             BufferedImage bufferedImage = new BufferedImage(deviceInfo.imageWidth, deviceInfo.imageHeight, BufferedImage.TYPE_BYTE_GRAY);
             byte[] imageBuffer1 = ((java.awt.image.DataBufferByte) bufferedImage.getRaster().getDataBuffer()).getData();
             if (jsgFPLib != null) {
@@ -61,47 +56,17 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
                 if (erorCode == SGFDxErrorCode.SGFDX_ERROR_NONE) {
 
                     return captureFingerPrint(bufferedImage, imageBuffer1, fingerPosition, err, populateImagebytes);
-//                    //convertBytetoImage(img1gray);
-//                    long ret2 = jsgFPLib.GetImageQuality(deviceInfo.imageWidth, deviceInfo.imageHeight, imageBuffer1, qualityArray);
-//
-//                    quality = qualityArray[0];
-//
-//                    SGFingerInfo fingerInfo = new SGFingerInfo();
-//                    fingerInfo.FingerNumber = fingerPosition;
-//                    fingerInfo.ImageQuality = quality;
-//                    fingerInfo.ImpressionType = SGImpressionType.SG_IMPTYPE_LP;
-//                    fingerInfo.ViewNumber = 1;
-//
-//                    jsgFPLib.CreateTemplate(fingerInfo, imageBuffer1, imageTemplate);
-//
-//                    fingerPrintInfo.setImageHeight(deviceInfo.imageHeight);
-//                    fingerPrintInfo.setImageWidth(deviceInfo.imageWidth);
-//                    fingerPrintInfo.setImageQuality(quality);
-//                    fingerPrintInfo.setDateCreated(new Date());
-//                    fingerPrintInfo.setImage(convertBytetoImage(bufferedImage));
-//                    fingerPrintInfo.setImageByte((populateImagebytes) ? imageBuffer1 : null);
-//                    if (fingerPosition != 0) {
-//                        //Java Enum is zero-based
-//                        fingerPrintInfo.setFingerPositions(AppModel.FingerPositions.values()[fingerPosition - 1]);
-//                    } else {
-//                        fingerPrintInfo.setFingerPositions(AppModel.FingerPositions.values()[fingerPosition]);
-//                    }
-//
-//                    fingerPrintInfo.setTemplate(Base64.getEncoder().encodeToString(imageTemplate));
-//                    fingerPrintInfo.setImageDPI(deviceInfo.imageDPI);
-//                    fingerPrintInfo.setErrorMessage(err);
-//
-//                    //  nfiqvalue = jsgFPLib.ComputeNFIQ(imageBuffer1, deviceInfo.imageWidth, deviceInfo.imageHeight);
-//                    return fingerPrintInfo;
                 } else {
-                    if (jsgFPLib.OpenDevice(SGFDxDeviceName.SG_DEV_AUTO) == SGFDxErrorCode.SGFDX_ERROR_NONE) {
-                        jsgFPLib.GetDeviceInfo(deviceInfo);
 
-                        logger.log(Logger.Level.INFO, "Device opened successfully");
-                        isDeviceOpen = true;
-                        long erorCode2 = jsgFPLib.GetImageEx(imageBuffer1, 10000, 0, 50);
-                         return captureFingerPrint(bufferedImage, imageBuffer1, fingerPosition, err, populateImagebytes);
-                    }
+                    jsgFPLib.Close();
+                    initializeDevice();
+                    BufferedImage bufferedImage2 = new BufferedImage(deviceInfo.imageWidth, deviceInfo.imageHeight, BufferedImage.TYPE_BYTE_GRAY);
+                    byte[] imageBuffer2 = ((java.awt.image.DataBufferByte) bufferedImage.getRaster().getDataBuffer()).getData();
+                    
+                    logger.log(Logger.Level.INFO, "Device opened successfully");
+                    long erorCode2 = jsgFPLib.GetImageEx(imageBuffer2, 10000, 0, 50);
+                    return captureFingerPrint(bufferedImage2, imageBuffer2, fingerPosition, err, populateImagebytes);
+                
                 }
             }
         } catch (Exception ex) {
@@ -130,7 +95,8 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
             fingerInfo.ViewNumber = 1;
 
             jsgFPLib.CreateTemplate(fingerInfo, imageBuffer1, imageTemplate);
-
+            
+           
             fingerPrintInfo.setImageHeight(deviceInfo.imageHeight);
             fingerPrintInfo.setImageWidth(deviceInfo.imageWidth);
             fingerPrintInfo.setImageQuality(quality);
