@@ -62,11 +62,11 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
                     initializeDevice();
                     BufferedImage bufferedImage2 = new BufferedImage(deviceInfo.imageWidth, deviceInfo.imageHeight, BufferedImage.TYPE_BYTE_GRAY);
                     byte[] imageBuffer2 = ((java.awt.image.DataBufferByte) bufferedImage.getRaster().getDataBuffer()).getData();
-                    
+
                     logger.log(Logger.Level.INFO, "Device opened successfully");
                     long erorCode2 = jsgFPLib.GetImageEx(imageBuffer2, 10000, 0, 50);
                     return captureFingerPrint(bufferedImage2, imageBuffer2, fingerPosition, err, populateImagebytes);
-                
+
                 }
             }
         } catch (Exception ex) {
@@ -95,8 +95,7 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
             fingerInfo.ViewNumber = 1;
 
             jsgFPLib.CreateTemplate(fingerInfo, imageBuffer1, imageTemplate);
-            
-           
+
             fingerPrintInfo.setImageHeight(deviceInfo.imageHeight);
             fingerPrintInfo.setImageWidth(deviceInfo.imageWidth);
             fingerPrintInfo.setImageQuality(quality);
@@ -121,8 +120,34 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
         return null;
     }
 
+    //to verify ISO Templates
     @Override
     public int verify(FingerPrintMatchInputModel input) {
+        int matchedRecord = 0;
+        long error;
+        boolean[] matched = new boolean[1];
+        byte[] unknownTemplateArray = Base64.getDecoder().decode(input.getFingerPrintTemplate());
+
+        for (FingerPrintInfo each : input.getFingerPrintTemplateListToMatch()) {
+            byte[] fingerTemplate = Base64.getDecoder().decode(each.getTemplate());
+
+            SGISOTemplateInfo sample_info = new SGISOTemplateInfo();
+            error = jsgFPLib.GetIsoTemplateInfo(fingerTemplate, sample_info);
+            for (int i = 0; i < sample_info.TotalSamples; i++) {
+
+                error = jsgFPLib.MatchIsoTemplate(fingerTemplate, i, unknownTemplateArray, 0, SGFDxSecurityLevel.SL_NORMAL, matched);
+
+                if (matched[0]) {
+                    matchedRecord = each.getPatienId();
+                    break;
+                }
+            }
+        }
+        return matchedRecord;
+    }
+
+    //for use with default secugen template
+    private int verifyDefault(FingerPrintMatchInputModel input) {
         int matchedRecord = 0;
         boolean[] matched = new boolean[1];
         byte[] unknownTemplateArray = Base64.getDecoder().decode(input.getFingerPrintTemplate());
@@ -152,7 +177,7 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
                 jsgFPLib.GetDeviceInfo(deviceInfo);
 
                 logger.log(Logger.Level.INFO, "Device opened successfully");
-                //jsgFPLib.SetTemplateFormat(SGFDxTemplateFormat.TEMPLATE_FORMAT_ISO19794);
+                jsgFPLib.SetTemplateFormat(SGFDxTemplateFormat.TEMPLATE_FORMAT_ISO19794);
                 isDeviceOpen = true;
 
             }
