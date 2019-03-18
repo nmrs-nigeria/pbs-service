@@ -61,7 +61,7 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
                     jsgFPLib.Close();
                     initializeDevice();
                     BufferedImage bufferedImage2 = new BufferedImage(deviceInfo.imageWidth, deviceInfo.imageHeight, BufferedImage.TYPE_BYTE_GRAY);
-                    byte[] imageBuffer2 = ((java.awt.image.DataBufferByte) bufferedImage.getRaster().getDataBuffer()).getData();
+                    byte[] imageBuffer2 = ((java.awt.image.DataBufferByte) bufferedImage2.getRaster().getDataBuffer()).getData();
 
                     logger.log(Logger.Level.INFO, "Device opened successfully");
                     long erorCode2 = jsgFPLib.GetImageEx(imageBuffer2, 10000, 0, 50);
@@ -84,7 +84,7 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
             int quality = 0;
             long nfiqvalue;
 
-            long ret2 = jsgFPLib.GetImageQuality(deviceInfo.imageWidth, deviceInfo.imageHeight, imageBuffer1, qualityArray);
+            long error = jsgFPLib.GetImageQuality(deviceInfo.imageWidth, deviceInfo.imageHeight, imageBuffer1, qualityArray);
 
             quality = qualityArray[0];
 
@@ -94,7 +94,7 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
             fingerInfo.ImpressionType = SGImpressionType.SG_IMPTYPE_LP;
             fingerInfo.ViewNumber = 1;
 
-            jsgFPLib.CreateTemplate(fingerInfo, imageBuffer1, imageTemplate);
+            error = jsgFPLib.CreateTemplate(fingerInfo, imageBuffer1, imageTemplate);
 
             fingerPrintInfo.setImageHeight(deviceInfo.imageHeight);
             fingerPrintInfo.setImageWidth(deviceInfo.imageWidth);
@@ -111,12 +111,15 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
 
             fingerPrintInfo.setTemplate(Base64.getEncoder().encodeToString(imageTemplate));
             fingerPrintInfo.setImageDPI(deviceInfo.imageDPI);
-            fingerPrintInfo.setErrorMessage(err);
-
+            
+            if (error != SGFDxErrorCode.SGFDX_ERROR_NONE) {
+                fingerPrintInfo.setErrorMessage(String.valueOf(error));
+            }
             //  nfiqvalue = jsgFPLib.ComputeNFIQ(imageBuffer1, deviceInfo.imageWidth, deviceInfo.imageHeight);
             return fingerPrintInfo;
         } catch (Exception ex) {
         }
+
         return null;
     }
 

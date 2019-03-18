@@ -17,6 +17,13 @@ import java.util.List;
 
         private List<FingerPrintInfo> FingerPrintTemplateListToMatch;
 
+    public FingerPrintMatchInputModel(String FingerPrintTemplate, List<FingerPrintInfo> FingerPrintTemplateListToMatch) {
+        this.FingerPrintTemplate = FingerPrintTemplate;
+        this.FingerPrintTemplateListToMatch = FingerPrintTemplateListToMatch;
+    }
+        
+        
+
         public String getFingerPrintTemplate() {
             return FingerPrintTemplate;
         }
