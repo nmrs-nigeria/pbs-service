@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import javax.annotation.Resource;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
@@ -254,6 +255,15 @@ public class DbManager {
         //closeConnection();
         return nameAndPersonMap;
 
+    }
+    
+    
+    public int deletePatientBiometricInfo(String patientUid) throws SQLException, ClassNotFoundException{ 
+         // Map<String,String> nameAndPersonMap =  RetrievePatientIdAndNameByUUID(patientUid);
+          ppStatement = conn.prepareStatement("DELETE  FROM `biometricinfo` WHERE patient_id in (select p.person_id from person p where p.uuid = ? )");
+          ppStatement.setString(1, patientUid);
+           
+         return ppStatement.executeUpdate();      
     }
 
 }

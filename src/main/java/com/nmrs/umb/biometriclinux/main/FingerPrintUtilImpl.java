@@ -30,72 +30,72 @@ import org.jboss.logging.Logger;
  * @author Morrison Idiasirue
  */
 public class FingerPrintUtilImpl implements FingerPrintUtil {
-
+    
     private JSGFPLib jsgFPLib = null;
     private SGDeviceInfoParam deviceInfo;
     private BufferedImage bufferedImage;
     private byte[] imageTemplate = new byte[400];
     private boolean isDeviceOpen = false;
     private static String OS = System.getProperty("os.name").toLowerCase();
-
+    
     Logger logger = Logger.getLogger(FingerPrintUtilImpl.class);
-
+    
     @Override
     public FingerPrintInfo capture(int fingerPosition, String err, boolean populateImagebytes) {
-
+        
         if (isDeviceOpen == false) {
             initializeDevice();
         }
-
+        
         try {
-
+            
             BufferedImage bufferedImage = new BufferedImage(deviceInfo.imageWidth, deviceInfo.imageHeight, BufferedImage.TYPE_BYTE_GRAY);
             byte[] imageBuffer1 = ((java.awt.image.DataBufferByte) bufferedImage.getRaster().getDataBuffer()).getData();
             if (jsgFPLib != null) {
                 long erorCode = jsgFPLib.GetImageEx(imageBuffer1, 10000, 0, 50);
                 if (erorCode == SGFDxErrorCode.SGFDX_ERROR_NONE) {
-
+                    
                     return captureFingerPrint(bufferedImage, imageBuffer1, fingerPosition, err, populateImagebytes);
                 } else {
-
+                    
                     jsgFPLib.Close();
                     initializeDevice();
                     BufferedImage bufferedImage2 = new BufferedImage(deviceInfo.imageWidth, deviceInfo.imageHeight, BufferedImage.TYPE_BYTE_GRAY);
                     byte[] imageBuffer2 = ((java.awt.image.DataBufferByte) bufferedImage2.getRaster().getDataBuffer()).getData();
-
+                    
                     logger.log(Logger.Level.INFO, "Device opened successfully");
                     long erorCode2 = jsgFPLib.GetImageEx(imageBuffer2, 10000, 0, 50);
                     return captureFingerPrint(bufferedImage2, imageBuffer2, fingerPosition, err, populateImagebytes);
-
+                    
                 }
             }
         } catch (Exception ex) {
-
+            
         }
         return null;
-
+        
     }
-
+    
     private FingerPrintInfo captureFingerPrint(BufferedImage bufferedImage, byte[] imageBuffer1, int fingerPosition, String err, boolean populateImagebytes) {
-
+        
         FingerPrintInfo fingerPrintInfo = new FingerPrintInfo();
         try {
             int[] qualityArray = new int[1];
             int quality = 0;
             long nfiqvalue;
-
+            
             long error = jsgFPLib.GetImageQuality(deviceInfo.imageWidth, deviceInfo.imageHeight, imageBuffer1, qualityArray);
-
+            
             quality = qualityArray[0];
-
+            
             SGFingerInfo fingerInfo = new SGFingerInfo();
             fingerInfo.FingerNumber = fingerPosition;
             fingerInfo.ImageQuality = quality;
             fingerInfo.ImpressionType = SGImpressionType.SG_IMPTYPE_LP;
             fingerInfo.ViewNumber = 1;
-
+            
             error = jsgFPLib.CreateTemplate(fingerInfo, imageBuffer1, imageTemplate);
-
+            
             fingerPrintInfo.setImageHeight(deviceInfo.imageHeight);
             fingerPrintInfo.setImageWidth(deviceInfo.imageWidth);
             fingerPrintInfo.setImageQuality(quality);
@@ -108,7 +108,7 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
             } else {
                 fingerPrintInfo.setFingerPositions(AppModel.FingerPositions.values()[fingerPosition]);
             }
-
+            
             fingerPrintInfo.setTemplate(Base64.getEncoder().encodeToString(imageTemplate));
             fingerPrintInfo.setImageDPI(deviceInfo.imageDPI);
             
@@ -119,7 +119,7 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
             return fingerPrintInfo;
         } catch (Exception ex) {
         }
-
+        
         return null;
     }
 
@@ -129,25 +129,33 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
         int matchedRecord = 0;
         long error;
         boolean[] matched = new boolean[1];
-        byte[] unknownTemplateArray = Base64.getDecoder().decode(input.getFingerPrintTemplate());
-
-        for (FingerPrintInfo each : input.getFingerPrintTemplateListToMatch()) {
-            byte[] fingerTemplate = Base64.getDecoder().decode(each.getTemplate());
-
-            SGISOTemplateInfo sample_info = new SGISOTemplateInfo();
-            error = jsgFPLib.GetIsoTemplateInfo(fingerTemplate, sample_info);
-            for (int i = 0; i < sample_info.TotalSamples; i++) {
-
-                error = jsgFPLib.MatchIsoTemplate(fingerTemplate, i, unknownTemplateArray, 0, SGFDxSecurityLevel.SL_NORMAL, matched);
-
-                if (matched[0]) {
-                    matchedRecord = each.getPatienId();
-                    break;
+        
+        try {
+            byte[] unknownTemplateArray = Base64.getDecoder().decode(input.getFingerPrintTemplate());
+            
+            for (FingerPrintInfo each : input.getFingerPrintTemplateListToMatch()) {
+                byte[] fingerTemplate = Base64.getDecoder().decode(each.getTemplate());
+                
+                SGISOTemplateInfo sample_info = new SGISOTemplateInfo();
+                error = jsgFPLib.GetIsoTemplateInfo(fingerTemplate, sample_info);
+                for (int i = 0; i < sample_info.TotalSamples; i++) {
+                    
+                    error = jsgFPLib.MatchIsoTemplate(fingerTemplate, i, unknownTemplateArray, 0, SGFDxSecurityLevel.SL_NORMAL, matched);
+                    
+                    if (matched[0]) {
+                        matchedRecord = each.getPatienId();
+                        break;
+                    }
                 }
             }
+        } catch (Exception ex) {
+            logger.log(Logger.Level.FATAL, ex);
         }
+        
         return matchedRecord;
     }
+    
+    
 
     //for use with default secugen template
     private int verifyDefault(FingerPrintMatchInputModel input) {
@@ -155,7 +163,7 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
         boolean[] matched = new boolean[1];
         byte[] unknownTemplateArray = Base64.getDecoder().decode(input.getFingerPrintTemplate());
         SGISOTemplateInfo sample_info = new SGISOTemplateInfo();
-
+        
         for (FingerPrintInfo each : input.getFingerPrintTemplateListToMatch()) {
             byte[] fingerTemplate = Base64.getDecoder().decode(each.getTemplate());
             if (jsgFPLib.MatchTemplate(fingerTemplate, unknownTemplateArray, SGFDxSecurityLevel.SL_NORMAL, matched) == SGFDxErrorCode.SGFDX_ERROR_NONE) {
@@ -167,57 +175,57 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
         }
         return matchedRecord;
     }
-
+    
     private void initializeDevice() {
-
+        
         jsgFPLib = new JSGFPLib();
-
+        
         deviceInfo = new SGDeviceInfoParam();
-
+        
         if (jsgFPLib.Init(SGFDxDeviceName.SG_DEV_AUTO) == SGFDxErrorCode.SGFDX_ERROR_NONE) {
-
+            
             if (jsgFPLib.OpenDevice(SGFDxDeviceName.SG_DEV_AUTO) == SGFDxErrorCode.SGFDX_ERROR_NONE) {
                 jsgFPLib.GetDeviceInfo(deviceInfo);
-
+                
                 logger.log(Logger.Level.INFO, "Device opened successfully");
                 jsgFPLib.SetTemplateFormat(SGFDxTemplateFormat.TEMPLATE_FORMAT_ISO19794);
                 isDeviceOpen = true;
-
+                
             }
-
+            
         } else {
             throw new IllegalStateException("Device fail to initialize");
         }
-
+        
     }
-
+    
     private String convertBytetoImage(BufferedImage bImage2) {
-
+        
         try {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-
+            
             logger.log(Logger.Level.INFO, "started image conversion");
-
+            
             ImageIO.write(bImage2, "bmp", outputStream);
-
+            
             String base64Str = Base64.getEncoder().encodeToString(outputStream.toByteArray());
             //System.out.println(base64Str);
 
             outputStream.close();
-
+            
             return base64Str;
         } catch (Exception ex) {
             logger.log(Logger.Level.FATAL, ex.getMessage());
         }
-
+        
         return null;
-
+        
     }
-
+    
     public static boolean isWindows() {
-
+        
         return (OS.indexOf("win") >= 0);
-
+        
     }
-
+    
 }
