@@ -1,0 +1,104 @@
+=================================================================
+SYSTEM INSTALLATION NOTES
+=================================================================
+1. Install the following packages if not already installed on your system.
+    libgtk2.0-dev (2.24.23-0ubuntu1)
+
+2. Install the SecuGen USB Device Drivers
+    cd <install_dir>/lib/linux3
+    make install
+    If you need to uninstall, the command is (make uninstall)
+
+3. By default, only the root user can access the SecuGen USB device because the device requires
+    write permissions, To allow non-root users to use the device, perform the following steps:
+    3.1 Create a SecuGen Group
+        # groupadd SecuGen
+    3.2 Add fingerprint users to the SecuGen group.
+        #gpasswd -a myUserID SecuGen
+        (substitute user name for myUserID)
+    3.3 Create a file in /etc/udev/rules.d/99SecuGen.rules.
+        Add the following lines:
+
+ATTRS{idVendor}=="1162", ATTRS{idProduct}=="0320", SYMLINK+="input/fdu03-%k", MODE="0660", GROUP="SecuGen"
+ATTRS{idVendor}=="1162", ATTRS{idProduct}=="0322", SYMLINK+="input/sdu03m-%k", MODE="0660", GROUP="SecuGen"
+ATTRS{idVendor}=="1162", ATTRS{idProduct}=="0330", SYMLINK+="input/fdu04-%k", MODE="0660", GROUP="SecuGen"
+ATTRS{idVendor}=="1162", ATTRS{idProduct}=="1000", SYMLINK+="input/sdu03p-%k", MODE="0660", GROUP="SecuGen"
+ATTRS{idVendor}=="1162", ATTRS{idProduct}=="2000", SYMLINK+="input/sdu04p-%k", MODE="0660", GROUP="SecuGen"
+ATTRS{idVendor}=="1162", ATTRS{idProduct}=="2200", SYMLINK+="input/u20-%k", MODE="0660", GROUP="SecuGen"
+ATTRS{idVendor}=="1162", ATTRS{idProduct}=="2201", SYMLINK+="input/upx-%k", MODE="0660", GROUP="SecuGen"
+ATTRS{idVendor}=="1162", ATTRS{idProduct}=="2203", SYMLINK+="input/u10-%k", MODE="0660", GROUP="SecuGen"
+KERNEL=="uinput", MODE="0660", GROUP="SecuGen"
+
+    3.4 Reboot
+    3.5 Note: The "ATTRS" function above is not supported by earlier Linux kernels. Use "SYSFS" instead to
+        configure UDEV permissions.
+
+
+4. Driver Library Configuration for java applications
+   libjnisgfplib.so supports only one class of SecuGen device at a time.
+   The default configuration is for the SecuGen UPx device.
+
+   Configuration for Hamster Plus
+   cd <install_dir>/lib/linux3
+   cp libjnisgfplib.so.3.8.5.fdu03_rename libjnisgfplib.so.3.8.5
+   make uninstall install
+
+   Configuration for Hamster IV
+   cd <install_dir>/lib/linux3
+   cp libjnisgfplib.so.3.8.5.fdu04_rename libjnisgfplib.so.3.8.5
+   make uninstall install
+
+   Configuration for Hamster PRO 20
+   cd <install_dir>/lib/linux3
+   cp libjnisgfplib.so.3.8.5.fdu05_rename libjnisgfplib.so.3.8.5
+   make uninstall install
+
+   Configuration for Hamster PRO
+   cd <install_dir>/lib/linux3
+   cp libjnisgfplib.so.3.8.5.fdu06_rename_default libjnisgfplib.so.3.8.5
+   make uninstall install
+
+4. Run the Following command
+
+sudo cp libsgfdu07.so.1.0.0 /usr/lib
+sudo cp libsgfdu06.so.1.0.0 /usr/lib
+sudo cp libsgfdu05.so.1.0.2 /usr/lib
+sudo cp libsgfdu04.so.1.0.4 /usr/lib
+sudo cp libsgfdu03.so.2.0.7 /usr/lib
+sudo cp libsgfplib.so.3.8.5 /usr/lib
+sudo cp libsgfpamx.so.3.5.2 /usr/lib
+sudo cp libjnisgfplib.so.3.8.5 /usr/lib
+sudo cp libpysgfplib.so.1.0.1 /usr/lib
+sudo cp libsgnfiq.so.1.0.0 /usr/lib
+sudo cp libsgimage.so.1.0.0 /usr/lib
+sudo cp libnxsdk.so /usr/lib
+sudo cp sgfdu05mlp.dat /usr/lib
+sudo /sbin/ldconfig /usr/lib
+
+
+5. copy nmrs-deploy folder to /opt
+
+6. copy the nmrs-biometric.service file to /etc/systemd/system
+
+7. sudo groupadd -r biometricapp
+
+
+8. sudo useradd -r -s /bin/false -g biometricapp biometricuser
+
+9. sudo usermod -aG sudo biometricuser  TAKE NOTE
+
+
+10. sudo chown -R biometricuser:biometricapp /opt/nmrs-deploy/
+
+11. sudo systemctl daemon-reload
+
+
+12. sudo systemctl start nmrs-biometric.service
+
+
+
+
+
+
+
+

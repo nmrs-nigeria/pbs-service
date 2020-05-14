@@ -109,7 +109,7 @@ public class DbManager {
         while (resultSet.next()) {
 
             FingerPrintInfo fingerPrintInfo = new FingerPrintInfo();
-            fingerPrintInfo.setCreator(resultSet.getInt("creator"));
+            fingerPrintInfo.setCreator(0);//default for NMRS
             fingerPrintInfo.setDateCreated(resultSet.getDate("date_created"));
             fingerPrintInfo.setPatienId(resultSet.getInt("patient_id"));
             fingerPrintInfo.setTemplate(resultSet.getString("template"));
@@ -129,9 +129,14 @@ public class DbManager {
     }
 
     public void closeConnection() throws SQLException {
-        conn.close();
-        // statement.close();
-        ppStatement.close();
+        if (Objects.nonNull(conn)) {
+            conn.close();
+            // statement.close();        
+        }
+        if (Objects.nonNull(ppStatement)) {
+            ppStatement.close();
+        }
+
     }
 
     public void Save(FingerPrintInfo fingerPrint) throws SQLException {
@@ -256,14 +261,13 @@ public class DbManager {
         return nameAndPersonMap;
 
     }
-    
-    
-    public int deletePatientBiometricInfo(String patientUid) throws SQLException, ClassNotFoundException{ 
-         // Map<String,String> nameAndPersonMap =  RetrievePatientIdAndNameByUUID(patientUid);
-          ppStatement = conn.prepareStatement("DELETE  FROM `biometricinfo` WHERE patient_id in (select p.person_id from person p where p.uuid = ? )");
-          ppStatement.setString(1, patientUid);
-           
-         return ppStatement.executeUpdate();      
+
+    public int deletePatientBiometricInfo(String patientUid) throws SQLException, ClassNotFoundException {
+        // Map<String,String> nameAndPersonMap =  RetrievePatientIdAndNameByUUID(patientUid);
+        ppStatement = conn.prepareStatement("DELETE  FROM `biometricinfo` WHERE patient_id in (select p.person_id from person p where p.uuid = ? )");
+        ppStatement.setString(1, patientUid);
+
+        return ppStatement.executeUpdate();
     }
 
 }

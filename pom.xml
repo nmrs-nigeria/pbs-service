@@ -50,15 +50,26 @@
             <version>1</version>
             <type>jar</type>
         </dependency>
+        
+        <!-- new cinfig for tomcat test -->
+        <!--
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-tomcat</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        -->
     </dependencies>
 
     <build>
         <finalName>nmrs-biometric</finalName>
         <plugins>
             <plugin>
+                
                 <configuration>
                     <executable>true</executable>
                 </configuration>
+                
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>

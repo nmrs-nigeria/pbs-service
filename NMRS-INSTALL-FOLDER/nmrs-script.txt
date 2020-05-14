@@ -1,0 +1,31 @@
+sudo groupadd -r biometricapp
+
+
+sudo useradd -r -s /bin/false -g biometricapp biometricuser
+
+sudo usermod -aG sudo biometricuser
+
+
+sudo chown -R biometricuser:biometricapp /opt/nmrs-deploy/
+
+copy the nmrs-biometric.service to /etc/systemd/system
+
+Step 3: Start Java Application service with systemd
+The next thing to do is start the application service, but first, reload systemd so that it knows of the new application added.
+
+sudo systemctl daemon-reload
+
+
+sudo systemctl start nmrs-biometric.service
+To check the status, use:
+
+sudo systemctl status nmrs-biometric
+
+ sudo systemctl enable nmrs-biometric
+
+
+
+sudo systemctl restart nmrs-biometric
+
+
+

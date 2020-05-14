@@ -8,7 +8,6 @@ package com.nmrs.umb.biometriclinux.controllers;
 import com.nmrs.umb.biometriclinux.dal.DbManager;
 import com.nmrs.umb.biometriclinux.main.AppUtil;
 import com.nmrs.umb.biometriclinux.main.FingerPrintUtilImpl;
-import com.nmrs.umb.biometriclinux.models.AppModel;
 import com.nmrs.umb.biometriclinux.models.DbModel;
 import com.nmrs.umb.biometriclinux.models.FingerPrintInfo;
 import com.nmrs.umb.biometriclinux.models.FingerPrintMatchInputModel;
@@ -43,21 +42,18 @@ public class FingerPrintController {
     @Autowired
     private Environment env;
 
-    FingerPrintUtilImpl fingerPrintUtilImpl = new FingerPrintUtilImpl();
-    FingerPrintInfo responseObject = null;
-    private DbManager dbManager = null;
-
+    //FingerPrintInfo responseObject = null;
     @RequestMapping(value = "api/FingerPrint/CapturePrint")
-    public ResponseEntity<?> CapturePrint(@RequestParam int fingerPosition) {
+    public ResponseEntity<FingerPrintInfo> CapturePrint(@RequestParam int fingerPosition) {
 
-        responseObject = new FingerPrintInfo();
-        responseObject = fingerPrintUtilImpl.capture(fingerPosition, null, false);
+        DbManager dbManager = new DbManager(AppUtil.getDatabaseSource(env));
+        FingerPrintUtilImpl fingerPrintUtilImpl = new FingerPrintUtilImpl();
+        FingerPrintInfo responseObject = fingerPrintUtilImpl.capture(fingerPosition, null, false);
 
         //
         try {
             if (Objects.isNull(responseObject.getErrorMessage())) {
-                DbModel dbModel = AppUtil.getDatabaseSource(env);
-                dbManager = new DbManager(dbModel);
+
                 dbManager.openConnection();
                 List<FingerPrintInfo> allPrevious = dbManager.GetPatientBiometricinfo(0);
 
@@ -73,6 +69,12 @@ public class FingerPrintController {
             }
         } catch (Exception ex) {
             logger.log(Logger.Level.FATAL, ex);
+        } finally {
+            try {
+                dbManager.closeConnection();
+            } catch (SQLException ex) {
+                  logger.log(Logger.Level.FATAL, ex);
+            }
         }
 
         return new ResponseEntity<>(responseObject, HttpStatus.OK);
@@ -87,7 +89,7 @@ public class FingerPrintController {
         }
         try {
             DbModel dbModel = AppUtil.getDatabaseSource(env);
-            dbManager = new DbManager(dbModel);
+             DbManager dbManager = new DbManager(dbModel);
             dbManager.openConnection();
             Map<String, String> patientInfo = dbManager.RetrievePatientIdAndNameByUUID(PatientUUID);
 
@@ -99,7 +101,7 @@ public class FingerPrintController {
 
         } catch (NumberFormatException | SQLException | ClassNotFoundException ex) {
             logger.log(Logger.Level.FATAL, ex.getMessage());
-            return new ResponseEntity(HttpStatus.BAD_REQUEST);
+            return new ResponseEntity("Error occurred getting patient information",HttpStatus.BAD_REQUEST);
         }
         return null;
     }
@@ -107,7 +109,7 @@ public class FingerPrintController {
     @RequestMapping(value = "api/FingerPrint/SaveToDatabase")
     public ResponseEntity<?> SaveToDatabase(@RequestBody SaveModel model) {
         DbModel dbModel = AppUtil.getDatabaseSource(env);
-        dbManager = new DbManager(dbModel);
+         DbManager dbManager = new DbManager(dbModel);
         List<FingerPrintInfo> fingerPrint = new ArrayList<>();
         ResponseModel responseModel = new ResponseModel();
 
@@ -146,8 +148,8 @@ public class FingerPrintController {
     public ResponseEntity<?> deleteFingerPrint(@RequestParam String patientId) {
 
         DbModel dbModel = AppUtil.getDatabaseSource(env);
-        dbManager = new DbManager(dbModel);
-       // ResponseModel responseModel = new ResponseModel();
+         DbManager dbManager = new DbManager(dbModel);
+        // ResponseModel responseModel = new ResponseModel();
 
         try {
             dbManager.openConnection();

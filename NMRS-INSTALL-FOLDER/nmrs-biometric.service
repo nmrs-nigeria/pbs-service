@@ -1,0 +1,15 @@
+[Unit]
+Description=NMRS Biometric Linux Service
+After=nmrslog.target
+
+[Service]
+WorkingDirectory=/opt/nmrs-deploy
+ExecStart=/bin/bash -c "java -jar nmrs-biometric.jar"
+User=biometricuser
+Type=simple
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+
