@@ -10,7 +10,7 @@
     </parent>
     <groupId>com.nmrs.umb</groupId>
     <artifactId>biometric-linux</artifactId>
-    <version>1.2.0-SNAPSHOT</version>
+    <version>1.3.0-SNAPSHOT</version>
     <packaging>jar</packaging>
     <name>biometric-linux</name>
     <description>NMRS Fingerprint biometric service</description>
@@ -51,6 +51,12 @@
             <type>jar</type>
         </dependency>
         
+        <dependency>
+            <groupId>org.apache.maven</groupId>
+            <artifactId>maven-model</artifactId>
+            <version>3.3.9</version>
+        </dependency>
+        
         <!-- new cinfig for tomcat test -->
         <!--
         <dependency>
@@ -72,8 +78,23 @@
                 
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>build-info</id>
+                        <goals>
+                            <goal>build-info</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
+           
         </plugins>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
     </build>
 
 </project>

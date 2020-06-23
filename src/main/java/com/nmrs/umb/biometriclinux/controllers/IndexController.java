@@ -8,11 +8,18 @@ package com.nmrs.umb.biometriclinux.controllers;
 import com.nmrs.umb.biometriclinux.dal.DbManager;
 import com.nmrs.umb.biometriclinux.main.AppUtil;
 import com.nmrs.umb.biometriclinux.models.DbModel;
+import java.io.File;
+import java.io.FileReader;
+import java.io.InputStreamReader;
 import java.sql.SQLException;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javafx.application.Application;
+import org.apache.maven.model.Model;
+import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.info.BuildProperties;
 import org.springframework.core.env.Environment;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -28,6 +35,9 @@ public class IndexController {
     @Autowired
     private Environment env;
 
+    @Autowired
+    BuildProperties buildProperties;
+
     @RequestMapping(value = "/")
     public String status() {
         return "Biometric service is running";
@@ -36,13 +46,35 @@ public class IndexController {
     @RequestMapping(value = "/server")
     public DbModel getDatabaseDetails() {
 
+        MavenXpp3Reader reader = new MavenXpp3Reader();
         DbModel dbModel = new DbModel();
+//        Model model;
+//        try {
+//            if ((new File("pom.xml")).exists()) {
+//                model = reader.read(new FileReader("pom.xml"));
+//            } else {
+//                model = reader.read(
+//                        new InputStreamReader(
+//                                Application.class.getResourceAsStream(
+//                                        "/META-INF/maven/com.nmrs.umb/biometric-linux/pom.xml"
+//                                )
+//                        )
+//                );
+//            }
+//
+//            dbModel.setAppVersion(model.getVersion());
+//
+//        } catch (Exception ex) {
+//            Logger.getLogger(IndexController.class.getName()).log(Level.SEVERE, null, ex);
+//        }
+
         dbModel.setDatabaseServer(env.getProperty("app.server"));
         dbModel.setPassword(env.getProperty("app.password"));
         dbModel.setUsername(env.getProperty("app.username"));
         dbModel.setdBName(env.getProperty("app.dbname"));
         dbModel.setPort(env.getProperty("server.port"));
         dbModel.setDbPort(env.getProperty("app.dbport"));
+        dbModel.setAppVersion(buildProperties.getVersion());
 
         return dbModel;
     }

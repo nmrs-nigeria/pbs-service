@@ -17,7 +17,18 @@ public class DbModel {
     private String port;
     private String dBName;
     private String dbPort;
+    private String appVersion;
+    
+    
 
+    public String getAppVersion() {
+        return appVersion;
+    }
+
+    public void setAppVersion(String appVersion) {
+        this.appVersion = appVersion;
+    }
+    
     public String getDatabaseServer() {
         return databaseServer;
     }
