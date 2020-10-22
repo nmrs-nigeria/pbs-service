@@ -73,7 +73,7 @@ public class FingerPrintController {
             try {
                 dbManager.closeConnection();
             } catch (SQLException ex) {
-                  logger.log(Logger.Level.FATAL, ex);
+                logger.log(Logger.Level.FATAL, ex);
             }
         }
 
@@ -89,7 +89,7 @@ public class FingerPrintController {
         }
         try {
             DbModel dbModel = AppUtil.getDatabaseSource(env);
-             DbManager dbManager = new DbManager(dbModel);
+            DbManager dbManager = new DbManager(dbModel);
             dbManager.openConnection();
             Map<String, String> patientInfo = dbManager.RetrievePatientIdAndNameByUUID(PatientUUID);
 
@@ -101,7 +101,7 @@ public class FingerPrintController {
 
         } catch (NumberFormatException | SQLException | ClassNotFoundException ex) {
             logger.log(Logger.Level.FATAL, ex.getMessage());
-            return new ResponseEntity("Error occurred getting patient information",HttpStatus.BAD_REQUEST);
+            return new ResponseEntity("Error occurred getting patient information", HttpStatus.BAD_REQUEST);
         }
         return null;
     }
@@ -109,9 +109,10 @@ public class FingerPrintController {
     @RequestMapping(value = "api/FingerPrint/SaveToDatabase")
     public ResponseEntity<?> SaveToDatabase(@RequestBody SaveModel model) {
         DbModel dbModel = AppUtil.getDatabaseSource(env);
-         DbManager dbManager = new DbManager(dbModel);
+        DbManager dbManager = new DbManager(dbModel);
         List<FingerPrintInfo> fingerPrint = new ArrayList<>();
         ResponseModel responseModel = new ResponseModel();
+        FingerPrintUtilImpl fingerPrintUtilImpl = new FingerPrintUtilImpl();
 
         try {
             String patientUUID = model.PatientUUID;
@@ -123,7 +124,18 @@ public class FingerPrintController {
                     a.setPatienId(pid);
                     fingerPrint.add(a);
                 });
+                int index = 0;
+                while (index < fingerPrint.size()) {
+                    int matchedId = fingerPrintUtilImpl.verify(new FingerPrintMatchInputModel(fingerPrint.get(index).getTemplate(), fingerPrint));
+                    if (matchedId != 0) {
+                        responseModel.setErrorMessage("Biometric contains duplicates kindly rescan");
+                        responseModel.setIsSuccessful(false);
+                        
+                        return new ResponseEntity<>(responseModel, HttpStatus.BAD_REQUEST);
+                    }
+                    index++;
 
+                }
                 responseModel = dbManager.SaveToDatabase(fingerPrint);
                 dbManager.closeConnection();
                 return new ResponseEntity<>(responseModel, HttpStatus.OK);
@@ -148,7 +160,7 @@ public class FingerPrintController {
     public ResponseEntity<?> deleteFingerPrint(@RequestParam String patientId) {
 
         DbModel dbModel = AppUtil.getDatabaseSource(env);
-         DbManager dbManager = new DbManager(dbModel);
+        DbManager dbManager = new DbManager(dbModel);
         // ResponseModel responseModel = new ResponseModel();
 
         try {

@@ -146,7 +146,13 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
                 byte[] fingerTemplate = Base64.getDecoder().decode(each.getTemplate());
 
                 SGISOTemplateInfo sample_info = new SGISOTemplateInfo();
+                try{
                 error = jsgFPLib.GetIsoTemplateInfo(fingerTemplate, sample_info);
+                
+                }catch(Exception ex){
+                    System.err.println(ex.getMessage());
+                }
+                
                 for (int i = 0; i < sample_info.TotalSamples; i++) {
 
                     error = jsgFPLib.MatchIsoTemplate(fingerTemplate, i, unknownTemplateArray, 0, SGFDxSecurityLevel.SL_NORMAL, matched);
