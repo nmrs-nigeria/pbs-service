@@ -5,6 +5,7 @@
  */
 package com.nmrs.umb.biometriclinux.dal;
 
+import com.nmrs.umb.biometriclinux.main.AppUtil;
 import com.nmrs.umb.biometriclinux.models.AppModel;
 import com.nmrs.umb.biometriclinux.models.DbModel;
 import com.nmrs.umb.biometriclinux.models.FingerPrintInfo;
@@ -29,7 +30,7 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration
 public class DbManager {
-
+    
     private Connection conn = null;
     private Statement statement = null;
     private PreparedStatement ppStatement = null;
@@ -40,7 +41,7 @@ public class DbManager {
     private String dbName = null;
     private String dbPort = null;
     private final String TABLENAME = "biometricinfo";
-
+    
     public DbManager(DbModel dbModel) {
         this.server = dbModel.getDatabaseServer();
         this.dbName = dbModel.getdBName();
@@ -48,20 +49,20 @@ public class DbManager {
         this.dbPassword = dbModel.getPassword();
         this.dbPort = dbModel.getDbPort();
     }
-
+    
     public DbManager() {
     }
-
+    
     public void openConnection() throws ClassNotFoundException, SQLException {
 
         // String serverUrl = "jdbc:mysql://localhost:3306/openmrs?useUnicode=true&useJDBCCompliantTimezoneShift=true&useLegacyDatetimeCode=false&serverTimezone=UTC";
         String serverUrl = MessageFormat.format("jdbc:mysql://{0}:{1}/{2}?useUnicode=true&useJDBCCompliantTimezoneShift=true&useLegacyDatetimeCode=false&serverTimezone=UTC", server, dbPort, dbName);
-
+        
         Class.forName("com.mysql.jdbc.Driver");
         conn = DriverManager
                 .getConnection(serverUrl, dbUsername, dbPassword);
     }
-
+    
     private void createFingerPrintTable() throws ClassNotFoundException, SQLException {
         //  DbManager dbManager = new DbManager();
         // openConnection();
@@ -81,31 +82,31 @@ public class DbManager {
                 + "PRIMARY KEY(`biometricInfo_Id`),"
                 + "FOREIGN KEY(patient_Id) REFERENCES patient(patient_Id),"
                 + "FOREIGN KEY(creator) REFERENCES patient(creator)) ENGINE = MYISAM AUTO_INCREMENT = 2 DEFAULT CHARSET = utf8; ");
-
+        
     }
-
+    
     public List<FingerPrintInfo> GetPatientBiometricinfo(int patientId) throws SQLException {
-
+        
         if (patientId != 0) {
             ppStatement = conn.prepareStatement("SELECT patient_id, template, imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, manufacturer, date_created, creator FROM " + TABLENAME + " where patient_id = ? ");
             ppStatement.setInt(1, patientId);
             resultSet = ppStatement.executeQuery();
-
+            
         } else {
             ppStatement = conn.prepareStatement("SELECT patient_id, template, imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, manufacturer, date_created, creator FROM " + TABLENAME);
             resultSet = ppStatement.executeQuery();
         }
-
+        
         return converToFingerPrintList(resultSet);
-
+        
     }
-
+    
     private List<FingerPrintInfo> converToFingerPrintList(ResultSet resultSet) throws SQLException {
-
+        
         List<FingerPrintInfo> fingerInfoList = new ArrayList<>();
-
+        
         while (resultSet.next()) {
-
+            
             FingerPrintInfo fingerPrintInfo = new FingerPrintInfo();
             fingerPrintInfo.setCreator(0);//default for NMRS
             fingerPrintInfo.setDateCreated(resultSet.getDate("date_created"));
@@ -115,17 +116,23 @@ public class DbManager {
             fingerPrintInfo.setImageHeight(resultSet.getInt("imageHeight"));
             fingerPrintInfo.setImageDPI(resultSet.getInt("imageDPI"));
             fingerPrintInfo.setImageQuality(resultSet.getInt("imageQuality"));
+            if (resultSet.getInt("imageQuality") < AppUtil.QUALITY_THRESHOLD) {
+                fingerPrintInfo.setQualityFlag(AppUtil.LOW_QUALITY_FLAG);
+            } else {
+                fingerPrintInfo.setQualityFlag(AppUtil.VALID_QUALITY_FLAG);
+            }
+            
             fingerPrintInfo.setFingerPositions(AppModel.FingerPositions.valueOf(resultSet.getString("fingerPosition")));
             fingerPrintInfo.setSerialNumber(resultSet.getString("serialNumber"));
             fingerPrintInfo.setModel(resultSet.getString("model"));
             fingerPrintInfo.setManufacturer(resultSet.getString("manufacturer"));
-
+            
             fingerInfoList.add(fingerPrintInfo);
         }
         return fingerInfoList;
-
+        
     }
-
+    
     public void closeConnection() throws SQLException {
         if (Objects.nonNull(conn)) {
             conn.close();
@@ -134,9 +141,9 @@ public class DbManager {
         if (Objects.nonNull(ppStatement)) {
             ppStatement.close();
         }
-
+        
     }
-
+    
     public void Save(FingerPrintInfo fingerPrint) throws SQLException {
         //String insertSQL = String.format();
         // insertSQL += String.format(fingerPrint.FingerPositions, fingerPrint.SerialNumber, fingerPrint.Model, fingerPrint.Manufacturer, fingerPrint.Creator);
@@ -152,33 +159,33 @@ public class DbManager {
         ppStatement.setString(9, fingerPrint.getModel());
         ppStatement.setString(10, fingerPrint.getManufacturer());
         ppStatement.setInt(11, fingerPrint.getCreator());
-
+        
         ppStatement.executeUpdate();
-
+        
     }
-
+    
     public ResponseModel SaveToDatabase(List<FingerPrintInfo> fingerPrintList) throws SQLException {
-
+        
         ResponseModel responseModel = new ResponseModel();
-
+        
         if (fingerPrintList.isEmpty()) {
             responseModel.setIsSuccessful(false);
             responseModel.setErrorMessage("The request contains an empty list");
         }
-
+        
         try {
-
+            
             for (FingerPrintInfo a : fingerPrintList) {
                 Save(a);
             }
-
+            
             responseModel.setIsSuccessful(true);
             responseModel.setErrorMessage("Saved successfully");
         } catch (SQLException ex) {
             responseModel.setIsSuccessful(false);
             responseModel.setErrorMessage(ex.getMessage());
         }
-
+        
         return responseModel;
     }
 
@@ -204,68 +211,68 @@ public class DbManager {
 //   
     //this is a database Id not the unique pepfar nor hospital Id
     public Map<String, String> RetrievePatientNameByPatientId(int patientId) throws SQLException {
-
+        
         ppStatement = conn.prepareStatement("SELECT CONCAT(given_name,' ',family_name) AS patient_name, pid.identifier FROM person_name pn "
                 + "INNER JOIN patient_identifier pid ON pn.person_id = pid.patient_id "
                 + "WHERE pid.identifier_type = 4 AND pid.patient_id = ?;");
-
+        
         ppStatement.setInt(1, patientId);
         resultSet = ppStatement.executeQuery();
         Map<String, String> nameAndIdentifier = new HashMap<>();
         while (resultSet.next()) {
-
+            
             nameAndIdentifier.put("name", resultSet.getString("patient_name"));
             nameAndIdentifier.put("Identifier", resultSet.getString("identifier"));
             break;
         }
-
+        
         return nameAndIdentifier;
-
+        
     }
-
+    
     public String RetrievePatientNameByPersonId(int personId) throws SQLException {
-
+        
         ppStatement = conn.prepareStatement("SELECT CONCAT(given_name,' ',family_name) AS patient_name FROM person_name pn "
                 + "WHERE person_id = ?;");
-
+        
         ppStatement.setInt(1, personId);
         resultSet = ppStatement.executeQuery();
         String foundName = "";
         while (resultSet.next()) {
-
+            
             foundName = resultSet.getString("patient_name");
         }
-
+        
         return foundName;
-
+        
     }
-
+    
     public Map<String, String> RetrievePatientIdAndNameByUUID(String UUID) throws SQLException, ClassNotFoundException {
         //openConnection();
         ppStatement = conn.prepareStatement("SELECT CONCAT(given_name,' ',family_name) AS patient_name, p.person_id "
                 + "FROM person_name pn INNER JOIN person p ON pn.person_id = p.person_id "
                 + "WHERE p.UUID = ?;");
-
+        
         ppStatement.setString(1, UUID);
         resultSet = ppStatement.executeQuery();
         Map<String, String> nameAndPersonMap = new HashMap<>();
         while (resultSet.next()) {
-
+            
             nameAndPersonMap.put("name", resultSet.getString("patient_name"));
             nameAndPersonMap.put("person_id", resultSet.getString("person_id"));
             break;
         }
         //closeConnection();
         return nameAndPersonMap;
-
+        
     }
-
+    
     public int deletePatientBiometricInfo(String patientUid) throws SQLException, ClassNotFoundException {
         // Map<String,String> nameAndPersonMap =  RetrievePatientIdAndNameByUUID(patientUid);
         ppStatement = conn.prepareStatement("DELETE  FROM `biometricinfo` WHERE patient_id in (select p.person_id from person p where p.uuid = ? )");
         ppStatement.setString(1, patientUid);
-
+        
         return ppStatement.executeUpdate();
     }
-
+    
 }

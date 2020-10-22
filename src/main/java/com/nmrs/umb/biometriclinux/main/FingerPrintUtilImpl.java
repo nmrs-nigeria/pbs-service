@@ -34,9 +34,10 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
     private JSGFPLib jsgFPLib = null;
     private SGDeviceInfoParam deviceInfo;
     // private BufferedImage bufferedImage;
-    private byte[] imageTemplate = new byte[400];
+    private byte[] imageTemplate;
     private boolean isDeviceOpen = false;
     private static String OS = System.getProperty("os.name").toLowerCase();
+    
 
     Logger logger = Logger.getLogger(FingerPrintUtilImpl.class);
 
@@ -84,6 +85,7 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
             int[] qualityArray = new int[1];
             int quality = 0;
             long nfiqvalue;
+            imageTemplate = new byte[deviceInfo.imageWidth*deviceInfo.imageHeight];
 
             long error = jsgFPLib.GetImageQuality(deviceInfo.imageWidth, deviceInfo.imageHeight, imageBuffer1, qualityArray);
 
@@ -115,6 +117,10 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
 
             if (error != SGFDxErrorCode.SGFDX_ERROR_NONE) {
                 fingerPrintInfo.setErrorMessage(String.valueOf(error));
+            }
+            
+            if(quality < AppUtil.QUALITY_THRESHOLD){
+                fingerPrintInfo.setErrorMessage("-1");
             }
             //  nfiqvalue = jsgFPLib.ComputeNFIQ(imageBuffer1, deviceInfo.imageWidth, deviceInfo.imageHeight);
             bufferedImage.flush();

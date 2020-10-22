@@ -26,4 +26,8 @@ public class AppUtil {
         return dbModel;
     }
 
+    public static final int QUALITY_THRESHOLD = 60;
+    public static final String LOW_QUALITY_FLAG = "low";
+    public static final String VALID_QUALITY_FLAG = "normal";
+
 }
