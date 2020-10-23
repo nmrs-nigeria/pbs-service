@@ -10,7 +10,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
 
 @EnableAutoConfiguration
-@ComponentScan({"com.nmrs.umb.biometriclinux.controllers"})
+@ComponentScan({"com.nmrs.umb.biometriclinux"})
 @SpringBootApplication
 public class BiometricLinuxApplication {
 

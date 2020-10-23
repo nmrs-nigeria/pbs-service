@@ -45,8 +45,8 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>fxsdpro</groupId>
-            <artifactId>com.secugen</artifactId>
+            <groupId>com.secugen</groupId>
+            <artifactId>fxsdpro</artifactId>
             <version>1</version>
             <type>jar</type>
         </dependency>

@@ -5,30 +5,33 @@
  */
 package com.nmrs.umb.biometriclinux.models;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import java.util.Date;
 
 /**
  *
  * @author Morrison Idiasirue <morrison.idiasirue@gmail.com>
  */
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class FingerPrintInfo {
 
     public String Manufacturer;
     public String Model;
     public String SerialNumber;
-    public int ImageWidth;
-    public int ImageHeight;
-    public int ImageDPI;
-    public int ImageQuality;
+    public Integer ImageWidth;
+    public Integer ImageHeight;
+    public Integer ImageDPI;
+    public Integer ImageQuality;
     public String Image;
     public byte[] ImageByte;
     public String Template;
     public AppModel.FingerPositions FingerPositions;
-    public int PatienId;
+    public Integer PatienId;
     public Date DateCreated;
-    public int Creator;
+    public Integer Creator;
     public String qualityFlag;
-
+    public String ErrorCode;
     public String ErrorMessage;
 
     public String getManufacturer() {
@@ -55,35 +58,35 @@ public class FingerPrintInfo {
         this.SerialNumber = SerialNumber;
     }
 
-    public int getImageWidth() {
+    public Integer getImageWidth() {
         return ImageWidth;
     }
 
-    public void setImageWidth(int ImageWidth) {
+    public void setImageWidth(Integer ImageWidth) {
         this.ImageWidth = ImageWidth;
     }
 
-    public int getImageHeight() {
+    public Integer getImageHeight() {
         return ImageHeight;
     }
 
-    public void setImageHeight(int ImageHeight) {
+    public void setImageHeight(Integer ImageHeight) {
         this.ImageHeight = ImageHeight;
     }
 
-    public int getImageDPI() {
+    public Integer getImageDPI() {
         return ImageDPI;
     }
 
-    public void setImageDPI(int ImageDPI) {
+    public void setImageDPI(Integer ImageDPI) {
         this.ImageDPI = ImageDPI;
     }
 
-    public int getImageQuality() {
+    public Integer getImageQuality() {
         return ImageQuality;
     }
 
-    public void setImageQuality(int ImageQuality) {
+    public void setImageQuality(Integer ImageQuality) {
         this.ImageQuality = ImageQuality;
     }
 
@@ -119,11 +122,11 @@ public class FingerPrintInfo {
         this.FingerPositions = FingerPositions;
     }
 
-    public int getPatienId() {
+    public Integer getPatienId() {
         return PatienId;
     }
 
-    public void setPatienId(int PatienId) {
+    public void setPatienId(Integer PatienId) {
         this.PatienId = PatienId;
     }
 
@@ -135,11 +138,11 @@ public class FingerPrintInfo {
         this.DateCreated = DateCreated;
     }
 
-    public int getCreator() {
+    public Integer getCreator() {
         return Creator;
     }
 
-    public void setCreator(int Creator) {
+    public void setCreator(Integer Creator) {
         this.Creator = Creator;
     }
 
@@ -159,4 +162,11 @@ public class FingerPrintInfo {
         this.qualityFlag = qualityFlag;
     }
 
+    public String getErrorCode() {
+        return ErrorCode;
+    }
+
+    public void setErrorCode(String errorCode) {
+        ErrorCode = errorCode;
+    }
 }

@@ -16,7 +16,6 @@ public class AppModel {
 
 
     public enum FingerPositions {
-
         RightThumb,
         RightIndex,
         RightMiddle,
