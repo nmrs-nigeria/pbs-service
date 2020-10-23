@@ -74,7 +74,7 @@ public class IndexController {
         dbModel.setdBName(env.getProperty("app.dbname"));
         dbModel.setPort(env.getProperty("server.port"));
         dbModel.setDbPort(env.getProperty("app.dbport"));
-//        dbModel.setAppVersion(buildProperties.getVersion());
+        dbModel.setAppVersion(env.getProperty("app.version"));
 
         return dbModel;
     }
