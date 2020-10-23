@@ -16,6 +16,7 @@ import java.util.logging.Logger;
 
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.info.BuildProperties;
 import org.springframework.core.env.Environment;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -35,8 +36,8 @@ public class IndexController {
 
 
 
-//    @Autowired
-//    BuildProperties buildProperties;
+    @Autowired
+    BuildProperties buildProperties;
 
     @RequestMapping(value = "/")
     public String status() {
@@ -74,7 +75,7 @@ public class IndexController {
         dbModel.setdBName(env.getProperty("app.dbname"));
         dbModel.setPort(env.getProperty("server.port"));
         dbModel.setDbPort(env.getProperty("app.dbport"));
-        dbModel.setAppVersion(env.getProperty("app.version"));
+       dbModel.setAppVersion(buildProperties.getVersion());
 
         return dbModel;
     }
