@@ -22,28 +22,33 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.util.Base64;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import javax.imageio.ImageIO;
 import org.jboss.logging.Logger;
+import org.springframework.stereotype.Component;
 
 /**
  *
  * @author Morrison Idiasirue
  */
+@Component
 public class FingerPrintUtilImpl implements FingerPrintUtil {
 
     private JSGFPLib jsgFPLib = null;
     private SGDeviceInfoParam deviceInfo;
     // private BufferedImage bufferedImage;
-    private byte[] imageTemplate = new byte[400];
+    private byte[] imageTemplate;
     private boolean isDeviceOpen = false;
     private static String OS = System.getProperty("os.name").toLowerCase();
+    
 
     Logger logger = Logger.getLogger(FingerPrintUtilImpl.class);
 
     @Override
     public FingerPrintInfo capture(int fingerPosition, String err, boolean populateImagebytes) {
 
-        if (isDeviceOpen == false) {
+        if (!isDeviceOpen) {
             initializeDevice();
         }
 
@@ -84,8 +89,9 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
             int[] qualityArray = new int[1];
             int quality = 0;
             long nfiqvalue;
+            imageTemplate = new byte[deviceInfo.imageWidth*deviceInfo.imageHeight];
 
-            long error = jsgFPLib.GetImageQuality(deviceInfo.imageWidth, deviceInfo.imageHeight, imageBuffer1, qualityArray);
+            jsgFPLib.GetImageQuality(deviceInfo.imageWidth, deviceInfo.imageHeight, imageBuffer1, qualityArray);
 
             quality = qualityArray[0];
 
@@ -95,27 +101,32 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
             fingerInfo.ImpressionType = SGImpressionType.SG_IMPTYPE_LP;
             fingerInfo.ViewNumber = 1;
 
-            error = jsgFPLib.CreateTemplate(fingerInfo, imageBuffer1, imageTemplate);
+            long error = jsgFPLib.CreateTemplate(fingerInfo, imageBuffer1, imageTemplate);
 
-            fingerPrintInfo.setImageHeight(deviceInfo.imageHeight);
-            fingerPrintInfo.setImageWidth(deviceInfo.imageWidth);
-            fingerPrintInfo.setImageQuality(quality);
-            fingerPrintInfo.setDateCreated(new Date());
-            fingerPrintInfo.setImage(convertBytetoImage(bufferedImage));
-            fingerPrintInfo.setImageByte((populateImagebytes) ? imageBuffer1 : null);
-            if (fingerPosition != 0) {
-                //Java Enum is zero-based
-                fingerPrintInfo.setFingerPositions(AppModel.FingerPositions.values()[fingerPosition - 1]);
-            } else {
-                fingerPrintInfo.setFingerPositions(AppModel.FingerPositions.values()[fingerPosition]);
+            if(error == SGFDxErrorCode.SGFDX_ERROR_NONE && quality < AppUtil.QUALITY_THRESHOLD){
+                fingerPrintInfo.setErrorCode("-1");
+                fingerPrintInfo.setErrorMessage("-1" +" - "+errorMap.get("-1"));
+            }else if(error != SGFDxErrorCode.SGFDX_ERROR_NONE){
+                fingerPrintInfo.setErrorCode(String.valueOf(error));
+                fingerPrintInfo.setErrorMessage(error +" - "+errorMap.get(String.valueOf(error)));
+            }else {
+                fingerPrintInfo.setImageHeight(deviceInfo.imageHeight);
+                fingerPrintInfo.setImageWidth(deviceInfo.imageWidth);
+                fingerPrintInfo.setImageQuality(quality);
+                fingerPrintInfo.setDateCreated(new Date());
+                fingerPrintInfo.setImage(convertBytetoImage(bufferedImage));
+                fingerPrintInfo.setImageByte((populateImagebytes) ? imageBuffer1 : null);
+                if (fingerPosition != 0) {
+                    //Java Enum is zero-based
+                    fingerPrintInfo.setFingerPositions(AppModel.FingerPositions.values()[fingerPosition - 1]);
+                } else {
+                    fingerPrintInfo.setFingerPositions(AppModel.FingerPositions.values()[fingerPosition]);
+                }
+
+                fingerPrintInfo.setTemplate(Base64.getEncoder().encodeToString(imageTemplate));
+                fingerPrintInfo.setImageDPI(deviceInfo.imageDPI);
             }
 
-            fingerPrintInfo.setTemplate(Base64.getEncoder().encodeToString(imageTemplate));
-            fingerPrintInfo.setImageDPI(deviceInfo.imageDPI);
-
-            if (error != SGFDxErrorCode.SGFDX_ERROR_NONE) {
-                fingerPrintInfo.setErrorMessage(String.valueOf(error));
-            }
             //  nfiqvalue = jsgFPLib.ComputeNFIQ(imageBuffer1, deviceInfo.imageWidth, deviceInfo.imageHeight);
             bufferedImage.flush();
             return fingerPrintInfo;
@@ -129,6 +140,7 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
     //to verify ISO Templates
     @Override
     public int verify(FingerPrintMatchInputModel input) {
+        if(jsgFPLib == null)  initializeDevice();
         int matchedRecord = 0;
         long error;
         boolean[] matched = new boolean[1];
@@ -140,16 +152,16 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
                 byte[] fingerTemplate = Base64.getDecoder().decode(each.getTemplate());
 
                 SGISOTemplateInfo sample_info = new SGISOTemplateInfo();
-                error = jsgFPLib.GetIsoTemplateInfo(fingerTemplate, sample_info);
-                for (int i = 0; i < sample_info.TotalSamples; i++) {
+//                jsgFPLib.GetIsoTemplateInfo(fingerTemplate, sample_info);
+//                for (int i = 0; i < sample_info.TotalSamples; i++) {
 
-                    error = jsgFPLib.MatchIsoTemplate(fingerTemplate, i, unknownTemplateArray, 0, SGFDxSecurityLevel.SL_NORMAL, matched);
+                    jsgFPLib.MatchIsoTemplate(fingerTemplate, 0, unknownTemplateArray, 0, SGFDxSecurityLevel.SL_NORMAL, matched);
 
                     if (matched[0]) {
                         matchedRecord = each.getPatienId();
                         break;
                     }
-                }
+//                }
             }
         } catch (Exception ex) {
             logger.log(Logger.Level.FATAL, ex);
@@ -226,4 +238,40 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
 
     }
 
+    Map<String, String> errorMap  = new HashMap<String, String>() {{
+        put("0", "No error");
+        put("1", "Creation failed (fingerprint reader not correctly installed or driver files error)");
+        put("2", "Function failed (wrong type of fingerprint reader or not correctly installed)");
+        put("3", "Internal (invalid parameters to sensor API)");
+        put("5", "DLL load failed");
+        put("6", "DLL load failed for driver");
+        put("7", "DLL load failed for algorithm");
+        put("51", "System file load failure");
+        put("52", "Sensor chip initialization failed");
+        put("53", "Sensor line dropped");
+        put("54", "Timeout");
+        put("55", "Device not found");
+        put("56", " Driver load failed");
+        put("57", " Wrong image");
+        put("58", " Lack of bandwidth");
+        put("59", " Device busy");
+        put("60", " Cannot get serial number of the device");
+        put("61", " Unsupported device");
+        put("101", " Very low minutiae count");
+        put("102", " Wrong template type");
+        put("103", " Invalid template");
+        put("104", " Invalid template");
+        put("105", " Could not extract features");
+        put("106", " Match failed");
+        put("1000", " No memory");
+        put("4000", " Invalid parameter passed to service");
+        put("2000", " Internal error");
+        put("3000", " Internal error extended");
+        put("6000", "Certificate error cannot decode");
+        put("10001", "License error");
+        put("10002", "Invalid domain");
+        put( "10003","License expired");
+        put("10004","WebAPI may not have received the origin header from the browser");
+        put("-1", "low Quality");
+    }};
 }

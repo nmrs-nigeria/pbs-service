@@ -8,18 +8,14 @@ package com.nmrs.umb.biometriclinux.controllers;
 import com.nmrs.umb.biometriclinux.dal.DbManager;
 import com.nmrs.umb.biometriclinux.main.AppUtil;
 import com.nmrs.umb.biometriclinux.models.DbModel;
-import java.io.File;
-import java.io.FileReader;
-import java.io.InputStreamReader;
+
 import java.sql.SQLException;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javafx.application.Application;
-import org.apache.maven.model.Model;
+
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.info.BuildProperties;
 import org.springframework.core.env.Environment;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -34,9 +30,13 @@ public class IndexController {
 
     @Autowired
     private Environment env;
-
     @Autowired
-    BuildProperties buildProperties;
+    AppUtil appUtil;
+
+
+
+//    @Autowired
+//    BuildProperties buildProperties;
 
     @RequestMapping(value = "/")
     public String status() {
@@ -74,7 +74,7 @@ public class IndexController {
         dbModel.setdBName(env.getProperty("app.dbname"));
         dbModel.setPort(env.getProperty("server.port"));
         dbModel.setDbPort(env.getProperty("app.dbport"));
-        dbModel.setAppVersion(buildProperties.getVersion());
+//        dbModel.setAppVersion(buildProperties.getVersion());
 
         return dbModel;
     }
@@ -84,15 +84,8 @@ public class IndexController {
     public String getPatientID(@RequestParam String uid) {
 
         try {
-//            Map<String, String> res = db.RetrievePatientIdAndNameByUUID(uid);
-//            if(res.isEmpty()){
-//            return null;
-//            }
-//            return res.get("person_id");
 
-            DbModel dbModel = AppUtil.getDatabaseSource(env);
-
-            DbManager db = new DbManager(dbModel);
+            DbManager db = new DbManager();
 
             db.openConnection();
             Map<String, String> res = db.RetrievePatientIdAndNameByUUID(uid);
@@ -100,7 +93,7 @@ public class IndexController {
                 return null;
             }
             return res.get("person_id");
-        } catch (SQLException | ClassNotFoundException ex) {
+        } catch (Exception ex) {
             Logger.getLogger(IndexController.class.getName()).log(Level.SEVERE, null, ex);
         }
         return null;
