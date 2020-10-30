@@ -83,12 +83,14 @@ public class DbManager {
         
     }
     
-    public List<FingerPrintInfo> GetPatientBiometricinfo(int patientId) throws Exception {
+    public List<FingerPrintInfo> GetPatientBiometricinfo(int patientId, boolean includeInvalid) throws Exception {
         
         if (patientId != 0) {
             String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template," +
                     " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, " +
                     "manufacturer, date_created, creator FROM " + TABLENAME + " where patient_id = ? ";
+
+            if(!includeInvalid) sql += " and template like 'RK1SA%' ";
             ppStatement = getConnection().prepareStatement(sql);
             ppStatement.setInt(1, patientId);
             resultSet = ppStatement.executeQuery();
@@ -98,7 +100,6 @@ public class DbManager {
         }
         
         return converToFingerPrintList(resultSet);
-        
     }
 
     public List<FingerPrintInfo> GetPatientBiometricInfoExcept(String patientUUID, int fingerPosition) throws Exception {
@@ -139,7 +140,11 @@ public class DbManager {
             fingerPrintInfo.setSerialNumber(resultSet.getString("serialNumber"));
             fingerPrintInfo.setModel(resultSet.getString("model"));
             fingerPrintInfo.setManufacturer(resultSet.getString("manufacturer"));
-            fingerPrintInfo.setTemplate(resultSet.getString("template"));
+            if(resultSet.getString("template") != null && !resultSet.getString("template").startsWith("RK1S")){
+                fingerPrintInfo.setQualityFlag(AppUtil.LOW_QUALITY_FLAG);
+            }else {
+                fingerPrintInfo.setTemplate(resultSet.getString("template"));
+            }
             
             fingerInfoList.add(fingerPrintInfo);
         }
