@@ -272,6 +272,6 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
         put("10002", "Invalid domain");
         put( "10003","License expired");
         put("10004","WebAPI may not have received the origin header from the browser");
-        put("-1", "low Quality");
+        put("-1", "low Quality/Invalid Data");
     }};
 }

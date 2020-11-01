@@ -47,7 +47,7 @@ public class FingerPrintController {
         try {
             if (Objects.isNull(responseObject.getErrorMessage())) {
                 dbManager.getConnection();
-                List<FingerPrintInfo> allPrevious = dbManager.GetPatientBiometricinfo(0);
+                List<FingerPrintInfo> allPrevious = dbManager.GetPatientBiometricinfo(0, false);
 
                 int matchedPatientId = fingerPrintUtilImpl.verify(new FingerPrintMatchInputModel(responseObject.Template, allPrevious));
 
@@ -118,7 +118,7 @@ public class FingerPrintController {
             Map<String, String> patientInfo = dbManager.RetrievePatientIdAndNameByUUID(PatientUUID);
 
             if (patientInfo != null) {
-                fingerPrint = dbManager.GetPatientBiometricinfo(Integer.parseInt(patientInfo.get("person_id")));
+                fingerPrint = dbManager.GetPatientBiometricinfo(Integer.parseInt(patientInfo.get("person_id")), true);
                 dbManager.closeConnection();
                 return new ResponseEntity<>(fingerPrint, HttpStatus.OK);
             }
