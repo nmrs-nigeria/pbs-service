@@ -83,12 +83,16 @@ public class FingerPrintController {
         try {
             if (Objects.isNull(responseObject.getErrorMessage())) {
                 dbManager.getConnection();
-                List<FingerPrintInfo> allPrevious = dbManager.GetPatientBiometricInfoExcept(patientId,fingerPosition);
+                List<FingerPrintInfo> allPrevious = dbManager.GetPatientBiometricInfoExcept(patientId, fingerPosition);
 
                 int matchedPatientId = fingerPrintUtilImpl.verify(new FingerPrintMatchInputModel(responseObject.Template, allPrevious));
 
                 if (matchedPatientId != 0) {
-                    responseObject.setErrorMessage("This finger has been captured");
+                    String patientName = dbManager.RetrievePatientNameByPersonId(matchedPatientId);
+
+                    String errString = MessageFormat.format("Finger print record already exist for this patient {0} Name : {1} {2} Person Identifier : {3}",
+                            "\n", patientName, "\n", matchedPatientId);
+                    responseObject.setErrorMessage(errString);
                 }else {
                     responseObject.setErrorMessage("");
                 }

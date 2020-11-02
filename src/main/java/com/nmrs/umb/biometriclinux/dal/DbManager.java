@@ -106,7 +106,8 @@ public class DbManager {
 
         String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template," +
                 " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, " +
-                "manufacturer, date_created, creator FROM " + TABLENAME +" where (patient_id in (select p.person_id from person p where p.uuid = ? ) AND fingerPosition != ?)";
+                "manufacturer, date_created, creator FROM " + TABLENAME +" where (patient_id not in (select p.person_id from person p where p.uuid = ? ) AND fingerPosition != ?) and template like 'Rk1SA%'";
+
         ppStatement = getConnection().prepareStatement(sql);
         ppStatement.setString(1, patientUUID);
         ppStatement.setString(2, AppModel.FingerPositions.values()[fingerPosition - 1].name());

@@ -17,5 +17,6 @@ public interface FingerPrintUtil {
     
     public FingerPrintInfo capture(int fingerPosition, String err, boolean populateImagebytes);
     public int verify(FingerPrintMatchInputModel input);
+    public int oldVerify(FingerPrintMatchInputModel input);
     
 }
