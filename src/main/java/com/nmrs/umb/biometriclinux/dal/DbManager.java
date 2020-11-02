@@ -90,7 +90,7 @@ public class DbManager {
                     " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, " +
                     "manufacturer, date_created, creator FROM " + TABLENAME + " where patient_id = ? ";
 
-            if(!includeInvalid) sql += " and template like 'RK1SA%' ";
+            if(!includeInvalid) sql += " and template like 'Rk1SA%' ";
             ppStatement = getConnection().prepareStatement(sql);
             ppStatement.setInt(1, patientId);
             resultSet = ppStatement.executeQuery();
@@ -140,8 +140,8 @@ public class DbManager {
             fingerPrintInfo.setSerialNumber(resultSet.getString("serialNumber"));
             fingerPrintInfo.setModel(resultSet.getString("model"));
             fingerPrintInfo.setManufacturer(resultSet.getString("manufacturer"));
-            if(resultSet.getString("template") != null && !resultSet.getString("template").startsWith("RK1S")){
-                fingerPrintInfo.setQualityFlag(AppUtil.LOW_QUALITY_FLAG);
+            if(resultSet.getString("template") != null && !resultSet.getString("template").startsWith("Rk1SA")){
+                fingerPrintInfo.setQualityFlag(AppUtil.INVALID_FINGER_PRINTS);
             }else {
                 fingerPrintInfo.setTemplate(resultSet.getString("template"));
             }

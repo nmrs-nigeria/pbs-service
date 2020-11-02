@@ -149,7 +149,8 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
             byte[] unknownTemplateArray = Base64.getDecoder().decode(input.getFingerPrintTemplate());
 
             for (FingerPrintInfo each : input.getFingerPrintTemplateListToMatch()) {
-                byte[] fingerTemplate = Base64.getDecoder().decode(each.getTemplate());
+                if(each != null){
+                 byte[] fingerTemplate = Base64.getDecoder().decode(each.getTemplate());
 
                 SGISOTemplateInfo sample_info = new SGISOTemplateInfo();
 //                jsgFPLib.GetIsoTemplateInfo(fingerTemplate, sample_info);
@@ -161,6 +162,8 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
                         matchedRecord = each.getPatienId();
                         break;
                     }
+                }
+               
 //                }
             }
         } catch (Exception ex) {
