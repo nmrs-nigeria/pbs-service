@@ -149,7 +149,7 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
             byte[] unknownTemplateArray = Base64.getDecoder().decode(input.getFingerPrintTemplate());
 
             for (FingerPrintInfo each : input.getFingerPrintTemplateListToMatch()) {
-                if(each != null){
+                if(each.getTemplate() != null ){
                  byte[] fingerTemplate = Base64.getDecoder().decode(each.getTemplate());
 
                 SGISOTemplateInfo sample_info = new SGISOTemplateInfo();
