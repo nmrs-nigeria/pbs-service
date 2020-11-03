@@ -49,11 +49,11 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
     @Override
     public FingerPrintInfo capture(int fingerPosition, String err, boolean populateImagebytes) {
 
-        if (!isDeviceOpen) {
-            initializeDevice();
-        }
-
         try {
+
+            if (!isDeviceOpen) {
+                initializeDevice();
+            }
 
             BufferedImage bufferedImage = new BufferedImage(deviceInfo.imageWidth, deviceInfo.imageHeight, BufferedImage.TYPE_BYTE_GRAY);
             byte[] imageBuffer1 = ((java.awt.image.DataBufferByte) bufferedImage.getRaster().getDataBuffer()).getData();
@@ -77,10 +77,11 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
                 
             }
         } catch (Exception ex) {
-
+            FingerPrintInfo fingerPrintInfo = new FingerPrintInfo();
+            fingerPrintInfo.setErrorMessage(ex.getMessage());
+            return fingerPrintInfo;
         }
         return null;
-
     }
 
     private FingerPrintInfo captureFingerPrint(BufferedImage bufferedImage, byte[] imageBuffer1, int fingerPosition, String err, boolean populateImagebytes) {

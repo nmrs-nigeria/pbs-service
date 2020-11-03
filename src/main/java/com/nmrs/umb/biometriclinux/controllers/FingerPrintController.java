@@ -81,7 +81,7 @@ public class FingerPrintController {
         FingerPrintInfo responseObject = fingerPrintUtilImpl.capture(fingerPosition, null, false);
 
         try {
-            if (Objects.isNull(responseObject.getErrorMessage())) {
+            if (responseObject != null && Objects.isNull(responseObject.getErrorMessage())) {
                 dbManager.getConnection();
                 List<FingerPrintInfo> allPrevious = dbManager.GetPatientBiometricInfoExcept(patientId);
 
