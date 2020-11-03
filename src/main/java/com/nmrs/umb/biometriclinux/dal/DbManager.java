@@ -90,27 +90,30 @@ public class DbManager {
                     " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, " +
                     "manufacturer, date_created, creator FROM " + TABLENAME + " where patient_id = ? ";
 
-            if(!includeInvalid) sql += " and template like 'Rk1SA%' ";
+            if(!includeInvalid) sql += " and (template like 'Rk1SA%' or (CONVERT(new_template USING utf8)) like 'Rk1SA%') ";
             ppStatement = getConnection().prepareStatement(sql);
             ppStatement.setInt(1, patientId);
             resultSet = ppStatement.executeQuery();
         } else {
-            ppStatement = getConnection().prepareStatement("SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template, imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, manufacturer, date_created, creator FROM " + TABLENAME);
+            String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template, imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, manufacturer, date_created, creator FROM " + TABLENAME;
+            if(!includeInvalid) sql += " where (template like 'Rk1SA%' or (CONVERT(new_template USING utf8)) like 'Rk1SA%') ";
+            ppStatement = getConnection().prepareStatement(sql);
             resultSet = ppStatement.executeQuery();
         }
         
         return converToFingerPrintList(resultSet);
     }
 
-    public List<FingerPrintInfo> GetPatientBiometricInfoExcept(String patientUUID, int fingerPosition) throws Exception {
+    public List<FingerPrintInfo> GetPatientBiometricInfoExcept(String patientUUID) throws Exception {
 
         String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template," +
                 " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, " +
-                "manufacturer, date_created, creator FROM " + TABLENAME +" where (patient_id not in (select p.person_id from person p where p.uuid = ? ) AND fingerPosition != ?) and template like 'Rk1SA%'";
+                "manufacturer, date_created, creator FROM " + TABLENAME +" where " +
+                "(patient_id != (select p.person_id from person p where p.uuid = ? )) " +
+                "and (template like 'Rk1SA%' or (CONVERT(new_template USING utf8)) like 'Rk1SA%')";
 
         ppStatement = getConnection().prepareStatement(sql);
         ppStatement.setString(1, patientUUID);
-        ppStatement.setString(2, AppModel.FingerPositions.values()[fingerPosition - 1].name());
 
         resultSet = ppStatement.executeQuery();
         return converToFingerPrintList(resultSet);
