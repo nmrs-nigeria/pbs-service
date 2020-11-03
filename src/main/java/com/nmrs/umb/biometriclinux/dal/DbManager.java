@@ -116,6 +116,23 @@ public class DbManager {
         return converToFingerPrintList(resultSet);
 
     }
+
+    public FingerPrintInfo GetPatientBiometricInfo(int patientId, String fingerPosition) throws Exception {
+
+        String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template," +
+                " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, " +
+                "manufacturer, date_created, creator FROM " + TABLENAME +" where patient_id = ? AND fingerPosition = ? ";
+
+        ppStatement = getConnection().prepareStatement(sql);
+        ppStatement.setString(1, String.valueOf(patientId));
+        ppStatement.setString(2, fingerPosition);
+
+        resultSet = ppStatement.executeQuery();
+        List<FingerPrintInfo> fingerInfoList = converToFingerPrintList(resultSet);
+        if (fingerInfoList.size() > 0) return fingerInfoList.get(0);
+        return null;
+
+    }
     
     private List<FingerPrintInfo> converToFingerPrintList(ResultSet resultSet) throws SQLException {
         
@@ -226,7 +243,12 @@ public class DbManager {
         try {
             
             for (FingerPrintInfo a : fingerPrintList) {
-                Save(a, update);
+                if(update){
+                    Save(a, this.GetPatientBiometricInfo(a.getPatienId(), a.getFingerPositions().name()) != null);
+                }else {
+                    Save(a, false);
+                }
+
             }
 
             updatePatientTable(fingerPrintList.get(0).getPatienId());
