@@ -14,16 +14,17 @@ import SecuGen.FDxSDKPro.jni.SGFDxTemplateFormat;
 import SecuGen.FDxSDKPro.jni.SGFingerInfo;
 import SecuGen.FDxSDKPro.jni.SGISOTemplateInfo;
 import SecuGen.FDxSDKPro.jni.SGImpressionType;
-import ch.qos.logback.core.Context;
 import com.nmrs.umb.biometriclinux.models.AppModel;
 import com.nmrs.umb.biometriclinux.models.FingerPrintInfo;
 import com.nmrs.umb.biometriclinux.models.FingerPrintMatchInputModel;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
-import java.util.Base64;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.imageio.ImageIO;
 import org.jboss.logging.Logger;
 import org.springframework.stereotype.Component;
@@ -140,37 +141,72 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
     //to verify ISO Templates
     @Override
     public int verify(FingerPrintMatchInputModel input) {
+        ExecutorService taskExecutor = Executors.newFixedThreadPool(20);
+        ConcurrentHashMap<String, Integer> concurrentHashMap = new ConcurrentHashMap<>();
+
+        int counter = 0;
         if(jsgFPLib == null)  initializeDevice();
-        int matchedRecord = 0;
-        long error;
+        final int[] matchedRecord = {0};
         boolean[] matched = new boolean[1];
+
+        List<List<FingerPrintInfo>> lists = Partition.ofSize(input.getFingerPrintTemplateListToMatch(), 1000);
 
         try {
             byte[] unknownTemplateArray = Base64.getDecoder().decode(input.getFingerPrintTemplate());
 
-            for (FingerPrintInfo each : input.getFingerPrintTemplateListToMatch()) {
-                if(each.getTemplate() != null ){
-                 byte[] fingerTemplate = Base64.getDecoder().decode(each.getTemplate());
-
-                SGISOTemplateInfo sample_info = new SGISOTemplateInfo();
-//                jsgFPLib.GetIsoTemplateInfo(fingerTemplate, sample_info);
-//                for (int i = 0; i < sample_info.TotalSamples; i++) {
-
-                    jsgFPLib.MatchIsoTemplate(fingerTemplate, 0, unknownTemplateArray, 0, SGFDxSecurityLevel.SL_NORMAL, matched);
-
-                    if (matched[0]) {
-                        matchedRecord = each.getPatienId();
-                        break;
+            for(List<FingerPrintInfo> printInfos : lists) {
+                Thread thread = new Thread(() -> {
+                    int id = getMatchedRecord(printInfos, matched, unknownTemplateArray);
+                    if(id > 0) {
+                        concurrentHashMap.putIfAbsent("match", id);
+                        taskExecutor.shutdownNow();
                     }
-                }
-               
-//                }
+                });
+                thread.setName("Thread" + counter++);
+                taskExecutor.submit(thread);
             }
+            taskExecutor.shutdown();
+            try {
+                taskExecutor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+            } catch (InterruptedException ignored) {}
+
+            if(concurrentHashMap.get("match") != null) return concurrentHashMap.get("match");
+            return 0;
+
         } catch (Exception ex) {
             logger.log(Logger.Level.FATAL, ex);
         }
 
-        return matchedRecord;
+        return matchedRecord[0];
+    }
+
+    //to verify ISO Templates
+    @Override
+    public int oldVerify(FingerPrintMatchInputModel input) {
+        if(jsgFPLib == null)  initializeDevice();
+        boolean[] matched = new boolean[1];
+
+        try {
+            byte[] unknownTemplateArray = Base64.getDecoder().decode(input.getFingerPrintTemplate());
+            return getMatchedRecord(input.getFingerPrintTemplateListToMatch(), matched, unknownTemplateArray);
+        }catch (Exception ex){
+            logger.log(Logger.Level.FATAL, ex);
+        }
+        return 0;
+    }
+
+    private int getMatchedRecord(List<FingerPrintInfo> fingerPrintInfos, boolean[] matched, byte[] unknownTemplateArray) {
+        for (FingerPrintInfo each : fingerPrintInfos) {
+//            System.out.println("Checking : "+each.getPatienId());
+            if(each.getTemplate() != null ){
+             byte[] fingerTemplate = Base64.getDecoder().decode(each.getTemplate());
+                jsgFPLib.MatchIsoTemplate(fingerTemplate, 0, unknownTemplateArray, 0, SGFDxSecurityLevel.SL_NORMAL, matched);
+                if (matched[0]) {
+                    return each.getPatienId();
+                }
+            }
+        }
+        return 0;
     }
 
     //for use with default secugen template
