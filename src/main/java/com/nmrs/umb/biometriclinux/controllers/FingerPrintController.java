@@ -62,11 +62,15 @@ public class FingerPrintController {
                 }
             }
         } catch (Exception ex) {
+            responseObject = new FingerPrintInfo();
+            responseObject.setErrorMessage(ex.getMessage());
             logger.log(Logger.Level.FATAL, ex);
         } finally {
             try {
                 dbManager.closeConnection();
             } catch (SQLException ex) {
+                responseObject = new FingerPrintInfo();
+                responseObject.setErrorMessage(ex.getMessage());
                   logger.log(Logger.Level.FATAL, ex);
             }
         }
@@ -99,10 +103,14 @@ public class FingerPrintController {
             }
         } catch (Exception ex) {
             logger.log(Logger.Level.FATAL, ex);
+            responseObject = new FingerPrintInfo();
+            responseObject.setErrorMessage(ex.getMessage());
         } finally {
             try {
                 dbManager.closeConnection();
             } catch (SQLException ex) {
+                responseObject = new FingerPrintInfo();
+                responseObject.setErrorMessage(ex.getMessage());
                 logger.log(Logger.Level.FATAL, ex);
             }
         }
@@ -129,7 +137,7 @@ public class FingerPrintController {
 
         } catch (Exception ex) {
             logger.log(Logger.Level.FATAL, ex.getMessage());
-            return new ResponseEntity("Error occurred getting patient information",HttpStatus.BAD_REQUEST);
+            return new ResponseEntity("Error occurred getting patient information - "+ex.getMessage(),HttpStatus.BAD_REQUEST);
         }
         return null;
     }
@@ -177,7 +185,8 @@ public class FingerPrintController {
             }
 
         } catch (Exception ex) {
-            responseModel.setErrorMessage("Error occurrd while performing your request");
+            responseModel = new ResponseModel();
+            responseModel.setErrorMessage("Error occurrd while performing your request - "+ex.getMessage());
             responseModel.setIsSuccessful(false);
             return new ResponseEntity<>(responseModel, HttpStatus.BAD_REQUEST);
         }
@@ -221,7 +230,8 @@ public class FingerPrintController {
             }
 
         } catch (Exception ex) {
-            responseModel.setErrorMessage("Error occurrd while performing your request");
+            responseModel = new ResponseModel();
+            responseModel.setErrorMessage("Error occurrd while performing your request - "+ex.getMessage());
             responseModel.setIsSuccessful(false);
             return new ResponseEntity<>(responseModel, HttpStatus.BAD_REQUEST);
         }
@@ -250,6 +260,7 @@ public class FingerPrintController {
             dbManager.closeConnection();
         } catch (Exception ex) {
             logger.log(Logger.Level.FATAL, ex);
+            return new ResponseEntity("Error occurred getting patient information - "+ex.getMessage(),HttpStatus.BAD_REQUEST);
         }
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
