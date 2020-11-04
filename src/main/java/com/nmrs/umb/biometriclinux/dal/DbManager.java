@@ -6,6 +6,7 @@
 package com.nmrs.umb.biometriclinux.dal;
 
 import com.nmrs.umb.biometriclinux.main.AppUtil;
+import com.nmrs.umb.biometriclinux.main.FingerPrintUtilImpl;
 import com.nmrs.umb.biometriclinux.models.AppModel;
 import com.nmrs.umb.biometriclinux.models.DbModel;
 import com.nmrs.umb.biometriclinux.models.FingerPrintInfo;
@@ -15,11 +16,7 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.sql.*;
 import java.text.MessageFormat;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
@@ -34,6 +31,8 @@ public class DbManager {
 
     @Autowired
     Environment env;
+    @Autowired
+    FingerPrintUtilImpl fingerPrintUtilImpl;
     
     private Connection conn = null;
     private Statement statement = null;
@@ -83,20 +82,17 @@ public class DbManager {
         
     }
     
-    public List<FingerPrintInfo> GetPatientBiometricinfo(int patientId, boolean includeInvalid) throws Exception {
+    public List<FingerPrintInfo> GetPatientBiometricinfo(int patientId) throws Exception {
         
         if (patientId != 0) {
             String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template," +
                     " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, " +
                     "manufacturer, date_created, creator FROM " + TABLENAME + " where patient_id = ? ";
-
-            if(!includeInvalid) sql += " and (template like 'Rk1SA%' or (CONVERT(new_template USING utf8)) like 'Rk1SA%') ";
             ppStatement = getConnection().prepareStatement(sql);
             ppStatement.setInt(1, patientId);
             resultSet = ppStatement.executeQuery();
         } else {
             String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template, imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, manufacturer, date_created, creator FROM " + TABLENAME;
-            if(!includeInvalid) sql += " where (template like 'Rk1SA%' or (CONVERT(new_template USING utf8)) like 'Rk1SA%') ";
             ppStatement = getConnection().prepareStatement(sql);
             resultSet = ppStatement.executeQuery();
         }
@@ -109,8 +105,7 @@ public class DbManager {
         String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template," +
                 " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, " +
                 "manufacturer, date_created, creator FROM " + TABLENAME +" where " +
-                "(patient_id != (select p.person_id from person p where p.uuid = ? )) " +
-                "and (template like 'Rk1SA%' or (CONVERT(new_template USING utf8)) like 'Rk1SA%')";
+                "(patient_id != (select p.person_id from person p where p.uuid = ? )) ";
 
         ppStatement = getConnection().prepareStatement(sql);
         ppStatement.setString(1, patientUUID);
@@ -161,12 +156,14 @@ public class DbManager {
             fingerPrintInfo.setSerialNumber(resultSet.getString("serialNumber"));
             fingerPrintInfo.setModel(resultSet.getString("model"));
             fingerPrintInfo.setManufacturer(resultSet.getString("manufacturer"));
-            if(resultSet.getString("template") != null && !resultSet.getString("template").startsWith("Rk1SA")){
-                fingerPrintInfo.setQualityFlag(AppUtil.INVALID_FINGER_PRINTS);
-            }else {
-                fingerPrintInfo.setTemplate(resultSet.getString("template"));
+
+            if(resultSet.getString("template") != null){
+                if(fingerPrintUtilImpl.isValid(resultSet.getString("template"))) {
+                    fingerPrintInfo.setTemplate(resultSet.getString("template"));
+                }else {
+                    fingerPrintInfo.setQualityFlag(AppUtil.INVALID_FINGER_PRINTS);
+                }
             }
-            
             fingerInfoList.add(fingerPrintInfo);
         }
         return fingerInfoList;

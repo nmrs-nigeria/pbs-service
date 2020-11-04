@@ -44,17 +44,20 @@ public class FingerPrintController {
 
         FingerPrintInfo responseObject = fingerPrintUtilImpl.capture(fingerPosition, null, false);
 
+        System.out.println("captured");
+
         try {
             if (Objects.isNull(responseObject.getErrorMessage())) {
                 dbManager.getConnection();
-                List<FingerPrintInfo> allPrevious = dbManager.GetPatientBiometricinfo(0, false);
+                System.out.println("getting all fingerprint in the database");
+                List<FingerPrintInfo> allPrevious = dbManager.GetPatientBiometricinfo(0);
 
                 int matchedPatientId = fingerPrintUtilImpl.verify(new FingerPrintMatchInputModel(responseObject.Template, allPrevious));
 
                 if (matchedPatientId != 0) {
                     String patientName = dbManager.RetrievePatientNameByPersonId(matchedPatientId);
 
-                    String errString = MessageFormat.format("Finger print record already exist for this patient {0} Name : {1} {2} Person Identifier : {3}",
+                    String errString = MessageFormat.format("Finger print record already exist for this patient {0} Name : {1} {2} Person Identifier : {3} Score: {4}",
                             "\n", patientName, "\n", matchedPatientId);
                     responseObject.setErrorMessage(errString);
                 }else {
@@ -130,7 +133,7 @@ public class FingerPrintController {
             Map<String, String> patientInfo = dbManager.RetrievePatientIdAndNameByUUID(PatientUUID);
 
             if (patientInfo != null) {
-                fingerPrint = dbManager.GetPatientBiometricinfo(Integer.parseInt(patientInfo.get("person_id")), true);
+                fingerPrint = dbManager.GetPatientBiometricinfo(Integer.parseInt(patientInfo.get("person_id")));
                 dbManager.closeConnection();
                 return new ResponseEntity<>(fingerPrint, HttpStatus.OK);
             }

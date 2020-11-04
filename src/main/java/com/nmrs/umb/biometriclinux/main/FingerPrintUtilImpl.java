@@ -27,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.imageio.ImageIO;
 import org.jboss.logging.Logger;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -42,7 +43,11 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
     private byte[] imageTemplate;
     private boolean isDeviceOpen = false;
     private static String OS = System.getProperty("os.name").toLowerCase();
-    
+
+    @Value("${num.of.threads:1}")
+    private String numberOfThreads;
+
+
 
     Logger logger = Logger.getLogger(FingerPrintUtilImpl.class);
 
@@ -60,9 +65,11 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
             if (jsgFPLib != null) {
                 long erorCode = jsgFPLib.GetImageEx(imageBuffer1, 10000, 0, 50);
                 if (erorCode == SGFDxErrorCode.SGFDX_ERROR_NONE) {
-
+                    
                     return captureFingerPrint(bufferedImage, imageBuffer1, fingerPosition, err, populateImagebytes);
                 } else {
+                    logger.log(Logger.Level.INFO, "Failed to get image "+ erorCode);
+                    logger.log(Logger.Level.INFO, "trying again");
 
                     jsgFPLib.Close();
                     initializeDevice();
@@ -90,8 +97,9 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
         try {
             int[] qualityArray = new int[1];
             int quality = 0;
-            long nfiqvalue;
-            imageTemplate = new byte[deviceInfo.imageWidth*deviceInfo.imageHeight];
+            int[] max = new int[1];
+            jsgFPLib.GetMaxTemplateSize(max);
+            imageTemplate = new byte[max[0]];
 
             jsgFPLib.GetImageQuality(deviceInfo.imageWidth, deviceInfo.imageHeight, imageBuffer1, qualityArray);
 
@@ -139,16 +147,32 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
         return null;
     }
 
+//    //to verify ISO Templates
+//    @Override
+//    public int verify(FingerPrintMatchInputModel input) {
+//        return oldVerify(input);
+//    }
     //to verify ISO Templates
     @Override
     public int verify(FingerPrintMatchInputModel input) {
-        ExecutorService taskExecutor = Executors.newFixedThreadPool(20);
+        int num = 1;
+        if(numberOfThreads != null || !numberOfThreads.isEmpty()){
+            try {
+                num = Integer.parseInt(numberOfThreads);
+            }catch (Exception ex){
+                logger.log(Logger.Level.INFO, "invalid number of threads - "+ex);
+                num = 1;
+            }
+        }
+        ExecutorService taskExecutor = Executors.newFixedThreadPool(num);
         ConcurrentHashMap<String, Integer> concurrentHashMap = new ConcurrentHashMap<>();
 
         int counter = 0;
         if(jsgFPLib == null)  initializeDevice();
         final int[] matchedRecord = {0};
         boolean[] matched = new boolean[1];
+
+        logger.log(Logger.Level.INFO, "validating fingerprints");
 
         List<List<FingerPrintInfo>> lists = Partition.ofSize(input.getFingerPrintTemplateListToMatch(), 1000);
 
@@ -157,6 +181,7 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
 
             for(List<FingerPrintInfo> printInfos : lists) {
                 Thread thread = new Thread(() -> {
+
                     int id = getMatchedRecord(printInfos, matched, unknownTemplateArray);
                     if(id > 0) {
                         concurrentHashMap.putIfAbsent("match", id);
@@ -196,17 +221,33 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
         return 0;
     }
 
+    public boolean isValid(String template) {
+        if(jsgFPLib == null)  initializeDevice();
+        byte[] fingerTemplate = Base64.getDecoder().decode(template);
+        int[] templateSize = new int[1];
+        int[] maxSize = new int[1];
+        jsgFPLib.GetTemplateSize(fingerTemplate,templateSize);
+        jsgFPLib.GetMaxTemplateSize(maxSize);
+        return templateSize[0] > 0 && templateSize[0] <= maxSize[0] ;
+    }
+
     private int getMatchedRecord(List<FingerPrintInfo> fingerPrintInfos, boolean[] matched, byte[] unknownTemplateArray) {
         for (FingerPrintInfo each : fingerPrintInfos) {
-//            System.out.println("Checking : "+each.getPatienId());
+            int[] matchScore = new int[1];
             if(each.getTemplate() != null ){
+                logger.log(Logger.Level.INFO, "Checking against : "+each.getPatienId()+" finger: "+each.getFingerPositions().name());
              byte[] fingerTemplate = Base64.getDecoder().decode(each.getTemplate());
-                jsgFPLib.MatchIsoTemplate(fingerTemplate, 0, unknownTemplateArray, 0, SGFDxSecurityLevel.SL_NORMAL, matched);
-                if (matched[0]) {
-                    return each.getPatienId();
+                long iError = jsgFPLib.MatchIsoTemplate(fingerTemplate, 0, unknownTemplateArray, 0, SGFDxSecurityLevel.SL_ABOVE_NORMAL, matched);
+                if (iError == SGFDxErrorCode.SGFDX_ERROR_NONE) {
+                    if (matched[0]) {
+                        jsgFPLib.GetIsoMatchingScore(fingerTemplate,0,unknownTemplateArray,0,matchScore);
+                        logger.log(Logger.Level.INFO, "found match : " + each.getPatienId()+" score - "+matchScore[0]);
+                        return each.getPatienId();
+                    }
                 }
             }
         }
+        logger.log(Logger.Level.INFO, "no match found ");
         return 0;
     }
 
@@ -219,7 +260,7 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
 
         for (FingerPrintInfo each : input.getFingerPrintTemplateListToMatch()) {
             byte[] fingerTemplate = Base64.getDecoder().decode(each.getTemplate());
-            if (jsgFPLib.MatchTemplate(fingerTemplate, unknownTemplateArray, SGFDxSecurityLevel.SL_NORMAL, matched) == SGFDxErrorCode.SGFDX_ERROR_NONE) {
+            if (jsgFPLib.MatchTemplate(fingerTemplate, unknownTemplateArray, SGFDxSecurityLevel.SL_ABOVE_NORMAL, matched) == SGFDxErrorCode.SGFDX_ERROR_NONE) {
                 if (matched[0]) {
                     matchedRecord = each.getPatienId();
                     break;
