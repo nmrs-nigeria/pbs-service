@@ -57,7 +57,7 @@ public class FingerPrintController {
                 if (matchedPatientId != 0) {
                     String patientName = dbManager.RetrievePatientNameByPersonId(matchedPatientId);
 
-                    String errString = MessageFormat.format("Finger print record already exist for this patient {0} Name : {1} {2} Person Identifier : {3} Score: {4}",
+                    String errString = MessageFormat.format("Finger print record already exist for this patient {0} Name : {1} {2} Person Identifier : {3} ",
                             "\n", patientName, "\n", matchedPatientId);
                     responseObject.setErrorMessage(errString);
                 }else {
