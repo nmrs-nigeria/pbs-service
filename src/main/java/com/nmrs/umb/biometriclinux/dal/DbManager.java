@@ -7,17 +7,19 @@ package com.nmrs.umb.biometriclinux.dal;
 
 import com.nmrs.umb.biometriclinux.main.AppUtil;
 import com.nmrs.umb.biometriclinux.main.FingerPrintUtilImpl;
-import com.nmrs.umb.biometriclinux.models.AppModel;
-import com.nmrs.umb.biometriclinux.models.DbModel;
-import com.nmrs.umb.biometriclinux.models.FingerPrintInfo;
-import com.nmrs.umb.biometriclinux.models.ResponseModel;
+import com.nmrs.umb.biometriclinux.models.*;
 
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.sql.*;
 import java.text.MessageFormat;
 import java.util.*;
 
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
+import org.jboss.logging.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
@@ -39,6 +41,8 @@ public class DbManager {
     private PreparedStatement ppStatement = null;
     private ResultSet resultSet = null;
     private final String TABLENAME = "biometricinfo";
+
+    Logger logger = Logger.getLogger(DbManager.class);
     
     public Connection openConnection() throws ClassNotFoundException, SQLException {
         String server = env.getProperty("app.server");
@@ -131,49 +135,145 @@ public class DbManager {
         return null;
 
     }
-    
+
+    public Set<Integer> getPatientsWithLowQualityData() throws Exception {
+
+        String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template," +
+                " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, " +
+                "manufacturer, date_created, creator FROM " + TABLENAME +" where imageQuality < ?";
+
+        ppStatement = getConnection().prepareStatement(sql);
+        ppStatement.setInt(1, AppUtil.QUALITY_THRESHOLD);
+
+        resultSet = ppStatement.executeQuery();
+        Set<Integer> printInfos =  convertToDistinctFingerPrintList(resultSet, false);
+        this.closeConnection();
+        return printInfos;
+
+    }
+
+    public Set<Integer> getPatientsWithInvalidData() throws Exception {
+
+        String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template," +
+                " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, " +
+                "manufacturer, date_created, creator FROM " + TABLENAME ;
+
+        ppStatement = getConnection().prepareStatement(sql);
+
+        resultSet = ppStatement.executeQuery();
+        Set<Integer> printInfos =  convertToDistinctFingerPrintList(resultSet, true);
+        this.closeConnection();
+        return printInfos;
+
+    }
+
     private List<FingerPrintInfo> converToFingerPrintList(ResultSet resultSet) throws SQLException {
+        return converToFingerPrintList(resultSet, false);
+    }
+    private Set<Integer> convertToDistinctFingerPrintList(ResultSet resultSet, boolean returnOnlyInValid) throws SQLException {
+
+        Set<Integer> patientIds = new HashSet<>();
+
+        while (resultSet.next()) {
+            if(returnOnlyInValid){
+                if(resultSet.getString("template") != null && !fingerPrintUtilImpl.isValid(resultSet.getString("template"))) {
+                    FingerPrintInfo fingerPrintInfo = getFingerPrintInfo(resultSet);
+                    patientIds.add(fingerPrintInfo.getPatienId());
+                }
+            }else{
+                FingerPrintInfo fingerPrintInfo = getFingerPrintInfo(resultSet);
+                patientIds.add(fingerPrintInfo.getPatienId());
+            }
+        }
+        return patientIds;
+
+    }
+
+    private List<FingerPrintInfo> converToFingerPrintList(ResultSet resultSet, boolean returnOnlyInValid) throws SQLException {
         
         List<FingerPrintInfo> fingerInfoList = new ArrayList<>();
         
         while (resultSet.next()) {
-            
-            FingerPrintInfo fingerPrintInfo = new FingerPrintInfo();
-            fingerPrintInfo.setCreator(0);//default for NMRS
-            fingerPrintInfo.setDateCreated(resultSet.getDate("date_created"));
-            fingerPrintInfo.setPatienId(resultSet.getInt("patient_id"));
-            fingerPrintInfo.setImageWidth(resultSet.getInt("imageWidth"));
-            fingerPrintInfo.setImageHeight(resultSet.getInt("imageHeight"));
-            fingerPrintInfo.setImageDPI(resultSet.getInt("imageDPI"));
-            fingerPrintInfo.setImageQuality(resultSet.getInt("imageQuality"));
-            if (resultSet.getInt("imageQuality") < AppUtil.QUALITY_THRESHOLD) {
-                fingerPrintInfo.setQualityFlag(AppUtil.LOW_QUALITY_FLAG);
-            } else {
-                fingerPrintInfo.setQualityFlag(AppUtil.VALID_QUALITY_FLAG);
-            }
-            
-            fingerPrintInfo.setFingerPositions(AppModel.FingerPositions.valueOf(resultSet.getString("fingerPosition")));
-            fingerPrintInfo.setSerialNumber(resultSet.getString("serialNumber"));
-            fingerPrintInfo.setModel(resultSet.getString("model"));
-            fingerPrintInfo.setManufacturer(resultSet.getString("manufacturer"));
-
-            if(resultSet.getString("template") != null){
-                if(fingerPrintUtilImpl.isValid(resultSet.getString("template"))) {
-                    fingerPrintInfo.setTemplate(resultSet.getString("template"));
-                }else {
-                    fingerPrintInfo.setQualityFlag(AppUtil.INVALID_FINGER_PRINTS);
+            if(returnOnlyInValid){
+                if(resultSet.getString("template") != null && !fingerPrintUtilImpl.isValid(resultSet.getString("template"))) {
+                    FingerPrintInfo fingerPrintInfo = getFingerPrintInfo(resultSet);
+                    fingerInfoList.add(fingerPrintInfo);
                 }
+            }else{
+                FingerPrintInfo fingerPrintInfo = getFingerPrintInfo(resultSet);
+                fingerInfoList.add(fingerPrintInfo);
             }
-            fingerInfoList.add(fingerPrintInfo);
         }
         return fingerInfoList;
         
     }
-    
+    private List<Patient> convertToPatientList(ResultSet resultSet) throws SQLException {
+
+        List<Patient> patients = new ArrayList<>();
+        while (resultSet.next()) {
+            Patient patient = new Patient();
+            patient.setId(resultSet.getString("patient_id"));
+            patient.setIdentifier(resultSet.getString("identifier"));
+            patient.setName(resultSet.getString("Name"));
+            patients.add(patient);
+        }
+        return patients;
+    }
+
+
+    private FingerPrintInfo getFingerPrintInfo(ResultSet resultSet) throws SQLException {
+        FingerPrintInfo fingerPrintInfo = new FingerPrintInfo();
+        fingerPrintInfo.setCreator(0);//default for NMRS
+        fingerPrintInfo.setDateCreated(resultSet.getDate("date_created"));
+        fingerPrintInfo.setPatienId(resultSet.getInt("patient_id"));
+        fingerPrintInfo.setImageWidth(resultSet.getInt("imageWidth"));
+        fingerPrintInfo.setImageHeight(resultSet.getInt("imageHeight"));
+        fingerPrintInfo.setImageDPI(resultSet.getInt("imageDPI"));
+        fingerPrintInfo.setImageQuality(resultSet.getInt("imageQuality"));
+        if (resultSet.getInt("imageQuality") < AppUtil.QUALITY_THRESHOLD) {
+            fingerPrintInfo.setQualityFlag(AppUtil.LOW_QUALITY_FLAG);
+        } else {
+            fingerPrintInfo.setQualityFlag(AppUtil.VALID_QUALITY_FLAG);
+        }
+
+        fingerPrintInfo.setFingerPositions(AppModel.FingerPositions.valueOf(resultSet.getString("fingerPosition")));
+        fingerPrintInfo.setSerialNumber(resultSet.getString("serialNumber"));
+        fingerPrintInfo.setModel(resultSet.getString("model"));
+        fingerPrintInfo.setManufacturer(resultSet.getString("manufacturer"));
+
+        if (resultSet.getString("template") != null) {
+            if (fingerPrintUtilImpl.isValid(resultSet.getString("template"))) {
+                fingerPrintInfo.setTemplate(resultSet.getString("template"));
+            } else {
+                fingerPrintInfo.setQualityFlag(AppUtil.INVALID_FINGER_PRINTS);
+            }
+        }
+        return fingerPrintInfo;
+    }
+
+    public ByteArrayInputStream getCsvFilePath(Set<Integer> patientIds){
+       try {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            try (final CSVPrinter printer = new CSVPrinter(new PrintWriter(out), CSVFormat.DEFAULT.withHeader("Patient Id", "Name", "Identifier"))) {
+                for(Integer patientId:patientIds) {
+                    Patient patient = getPatientDetails(patientId);
+                    if(patient != null) {
+                        printer.printRecord(patient.getId(), patient.getName(), patient.getIdentifier());
+                    }
+                }
+                printer.flush();
+                return new ByteArrayInputStream(out.toByteArray());
+            }
+        }
+        catch (Exception ex) {
+            logger.log(Logger.Level.FATAL, ex);
+        }
+        return null;
+    }
+
     public void closeConnection() throws SQLException {
         if (Objects.nonNull(conn)) {
             conn.close();
-            // statement.close();        
         }
         if (Objects.nonNull(ppStatement)) {
             ppStatement.close();
@@ -229,6 +329,22 @@ public class DbManager {
         ppStatement = getConnection().prepareStatement(sql);
         ppStatement.setInt(1, patientId);
         ppStatement.executeUpdate();
+    }
+
+    public Patient getPatientDetails(Integer patientId) throws Exception {
+        String sql = "SELECT p.person_id as patient_id, CONCAT(pn.family_name,' ', pn.given_name) as Name, " +
+                "pi.identifier as identifier from person p, person_name pn, patient_identifier pi " +
+                "where p.person_id = pn.person_id and p.person_id = pi.patient_id and pi.identifier_type = 4 " +
+                "and p.person_id = ?;";
+
+        ppStatement = getConnection().prepareStatement(sql);
+        ppStatement.setInt(1, patientId);
+
+        resultSet = ppStatement.executeQuery();
+        List<Patient> patients = convertToPatientList(resultSet);
+        this.closeConnection();
+        if (patients.size() > 0) return patients.get(0);
+        return null;
     }
     
     public ResponseModel SaveToDatabase(List<FingerPrintInfo> fingerPrintList, boolean update) throws Exception {
