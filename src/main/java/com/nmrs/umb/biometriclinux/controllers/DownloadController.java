@@ -12,6 +12,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.util.Set;
 
 @Controller
@@ -26,7 +27,7 @@ public class DownloadController {
 	}
 
 	@GetMapping("/download")
-	public ResponseEntity<Resource> getFile(@RequestParam(value="path") String path) {
+	public ResponseEntity<Object> getFile(@RequestParam(value="path") String path) {
 		String filename = null;
 		ByteArrayInputStream byteArrayInputStream = null;
 		try {
@@ -39,17 +40,24 @@ public class DownloadController {
 				Set<Integer> lowQuality = dbManager.getPatientsWithLowQualityData();
 				byteArrayInputStream = dbManager.getCsvFilePath(lowQuality);
 			}
+			if(byteArrayInputStream != null) {
+				InputStreamResource file = new InputStreamResource(byteArrayInputStream);
+
+				return ResponseEntity.ok()
+						.header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+						.contentType(MediaType.parseMediaType("application/csv"))
+						.body(file);
+			}
 		}catch (Exception e){
 			System.out.println(e.getMessage());
-		}
-
-		if(byteArrayInputStream != null) {
-			InputStreamResource file = new InputStreamResource(byteArrayInputStream);
-
-			return ResponseEntity.ok()
-					.header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
-					.contentType(MediaType.parseMediaType("application/csv"))
-					.body(file);
+			return  ResponseEntity.ok()
+					.body(e.getMessage());
+		}finally {
+			try {
+				if(byteArrayInputStream != null) byteArrayInputStream.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
 		return null;
 	}

@@ -140,7 +140,7 @@ public class DbManager {
 
         String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template," +
                 " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, " +
-                "manufacturer, date_created, creator FROM " + TABLENAME +" where imageQuality < ?";
+                "manufacturer, date_created, creator FROM " + TABLENAME +" where imageQuality < ? ORDER BY patient_id";
 
         ppStatement = getConnection().prepareStatement(sql);
         ppStatement.setInt(1, AppUtil.QUALITY_THRESHOLD);
@@ -156,7 +156,7 @@ public class DbManager {
 
         String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template," +
                 " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, " +
-                "manufacturer, date_created, creator FROM " + TABLENAME ;
+                "manufacturer, date_created, creator FROM " + TABLENAME + " ORDER BY patient_id";
 
         ppStatement = getConnection().prepareStatement(sql);
 
@@ -167,9 +167,6 @@ public class DbManager {
 
     }
 
-    private List<FingerPrintInfo> converToFingerPrintList(ResultSet resultSet) throws SQLException {
-        return converToFingerPrintList(resultSet, false);
-    }
     private Set<Integer> convertToDistinctFingerPrintList(ResultSet resultSet, boolean returnOnlyInValid) throws SQLException {
 
         Set<Integer> patientIds = new HashSet<>();
@@ -189,20 +186,13 @@ public class DbManager {
 
     }
 
-    private List<FingerPrintInfo> converToFingerPrintList(ResultSet resultSet, boolean returnOnlyInValid) throws SQLException {
+    private List<FingerPrintInfo> converToFingerPrintList(ResultSet resultSet) throws SQLException {
         
         List<FingerPrintInfo> fingerInfoList = new ArrayList<>();
         
         while (resultSet.next()) {
-            if(returnOnlyInValid){
-                if(resultSet.getString("template") != null && !fingerPrintUtilImpl.isValid(resultSet.getString("template"))) {
-                    FingerPrintInfo fingerPrintInfo = getFingerPrintInfo(resultSet);
-                    fingerInfoList.add(fingerPrintInfo);
-                }
-            }else{
-                FingerPrintInfo fingerPrintInfo = getFingerPrintInfo(resultSet);
-                fingerInfoList.add(fingerPrintInfo);
-            }
+            FingerPrintInfo fingerPrintInfo = getFingerPrintInfo(resultSet);
+            fingerInfoList.add(fingerPrintInfo);
         }
         return fingerInfoList;
         

@@ -140,7 +140,7 @@ public class FingerPrintController {
 
         } catch (Exception ex) {
             logger.log(Logger.Level.FATAL, ex.getMessage());
-            return new ResponseEntity("Error occurred getting patient information - "+ex.getMessage(),HttpStatus.BAD_REQUEST);
+            return new ResponseEntity("Error occurred getting information - "+ex.getMessage(),HttpStatus.BAD_REQUEST);
         }
         return null;
     }

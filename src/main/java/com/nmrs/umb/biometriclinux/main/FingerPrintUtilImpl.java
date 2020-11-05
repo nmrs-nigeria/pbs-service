@@ -5,18 +5,15 @@
  */
 package com.nmrs.umb.biometriclinux.main;
 
-import SecuGen.FDxSDKPro.jni.JSGFPLib;
-import SecuGen.FDxSDKPro.jni.SGDeviceInfoParam;
-import SecuGen.FDxSDKPro.jni.SGFDxDeviceName;
-import SecuGen.FDxSDKPro.jni.SGFDxErrorCode;
-import SecuGen.FDxSDKPro.jni.SGFDxSecurityLevel;
-import SecuGen.FDxSDKPro.jni.SGFDxTemplateFormat;
-import SecuGen.FDxSDKPro.jni.SGFingerInfo;
-import SecuGen.FDxSDKPro.jni.SGISOTemplateInfo;
-import SecuGen.FDxSDKPro.jni.SGImpressionType;
+import SecuGen.FDxSDKPro.jni.*;
 import com.nmrs.umb.biometriclinux.models.AppModel;
 import com.nmrs.umb.biometriclinux.models.FingerPrintInfo;
 import com.nmrs.umb.biometriclinux.models.FingerPrintMatchInputModel;
+import org.jboss.logging.Logger;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.util.*;
@@ -24,11 +21,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import javax.imageio.ImageIO;
-import org.jboss.logging.Logger;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 
 /**
  *
@@ -99,6 +91,8 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
             int quality = 0;
             int[] max = new int[1];
             jsgFPLib.GetMaxTemplateSize(max);
+            logger.log(Logger.Level.INFO, "Template Size" + max[0]);
+
             imageTemplate = new byte[max[0]];
 
             jsgFPLib.GetImageQuality(deviceInfo.imageWidth, deviceInfo.imageHeight, imageBuffer1, qualityArray);
@@ -228,7 +222,7 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
         int[] maxSize = new int[1];
         jsgFPLib.GetTemplateSize(fingerTemplate,templateSize);
         jsgFPLib.GetMaxTemplateSize(maxSize);
-        return templateSize[0] > 0 && templateSize[0] <= maxSize[0] ;
+        return templateSize[0] > 0 && templateSize[0] <= maxSize[0];
     }
 
     private int getMatchedRecord(List<FingerPrintInfo> fingerPrintInfos, boolean[] matched, byte[] unknownTemplateArray) {
@@ -269,28 +263,19 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
         }
         return matchedRecord;
     }
-
     private void initializeDevice() {
-
         jsgFPLib = new JSGFPLib();
-
         deviceInfo = new SGDeviceInfoParam();
-
         if (jsgFPLib.Init(SGFDxDeviceName.SG_DEV_AUTO) == SGFDxErrorCode.SGFDX_ERROR_NONE) {
-
             if (jsgFPLib.OpenDevice(SGFDxDeviceName.SG_DEV_AUTO) == SGFDxErrorCode.SGFDX_ERROR_NONE) {
                 jsgFPLib.GetDeviceInfo(deviceInfo);
-
                 logger.log(Logger.Level.INFO, "Device opened successfully");
                 jsgFPLib.SetTemplateFormat(SGFDxTemplateFormat.TEMPLATE_FORMAT_ISO19794);
                 isDeviceOpen = true;
-
             }
-
-        } else {
+        }else {
             throw new IllegalStateException("Device fail to initialize");
         }
-
     }
 
     private String convertBytetoImage(BufferedImage bImage2) {
