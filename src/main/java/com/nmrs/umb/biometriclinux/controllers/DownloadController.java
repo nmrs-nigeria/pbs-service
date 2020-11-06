@@ -39,6 +39,14 @@ public class DownloadController {
 				filename = "Patients_with_low_quality_fingerprint_data.csv";
 				Set<Integer> lowQuality = dbManager.getPatientsWithLowQualityData();
 				byteArrayInputStream = dbManager.getCsvFilePath(lowQuality);
+			} else if (path != null && path.equalsIgnoreCase("both")) {
+				filename = "Patients_fingerprint_data.csv";
+				Set<Integer> invalids = dbManager.getPatientsWithInvalidData();
+				Set<Integer> lowQuality = dbManager.getPatientsWithLowQualityData();
+				Set<Integer> none = dbManager.getPatientsWithoutFingerPrintData();
+				invalids.addAll(lowQuality);
+				invalids.addAll(none);
+				byteArrayInputStream = dbManager.getCsvFilePath(invalids);
 			}
 			if(byteArrayInputStream != null) {
 				InputStreamResource file = new InputStreamResource(byteArrayInputStream);

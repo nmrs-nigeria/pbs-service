@@ -52,6 +52,7 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
                 initializeDevice();
             }
 
+            if(deviceInfo.imageHeight == 0 || deviceInfo.imageWidth == 0) initializeDevice();
             BufferedImage bufferedImage = new BufferedImage(deviceInfo.imageWidth, deviceInfo.imageHeight, BufferedImage.TYPE_BYTE_GRAY);
             byte[] imageBuffer1 = ((java.awt.image.DataBufferByte) bufferedImage.getRaster().getDataBuffer()).getData();
             if (jsgFPLib != null) {
@@ -76,6 +77,7 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
                 
             }
         } catch (Exception ex) {
+            initializeDevice();
             FingerPrintInfo fingerPrintInfo = new FingerPrintInfo();
             fingerPrintInfo.setErrorMessage(ex.getMessage());
             return fingerPrintInfo;
@@ -150,53 +152,72 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
     @Override
     public int verify(FingerPrintMatchInputModel input) {
         int num = 1;
+        boolean override = false;
         if(numberOfThreads != null || !numberOfThreads.isEmpty()){
             try {
                 num = Integer.parseInt(numberOfThreads);
+                override = true;
             }catch (Exception ex){
                 logger.log(Logger.Level.INFO, "invalid number of threads - "+ex);
                 num = 1;
             }
         }
-        ExecutorService taskExecutor = Executors.newFixedThreadPool(num);
-        ConcurrentHashMap<String, Integer> concurrentHashMap = new ConcurrentHashMap<>();
-
-        int counter = 0;
-        if(jsgFPLib == null)  initializeDevice();
-        final int[] matchedRecord = {0};
-        boolean[] matched = new boolean[1];
-
-        logger.log(Logger.Level.INFO, "validating fingerprints");
-
-        List<List<FingerPrintInfo>> lists = Partition.ofSize(input.getFingerPrintTemplateListToMatch(), 1000);
-
-        try {
-            byte[] unknownTemplateArray = Base64.getDecoder().decode(input.getFingerPrintTemplate());
-
-            for(List<FingerPrintInfo> printInfos : lists) {
-                Thread thread = new Thread(() -> {
-
-                    int id = getMatchedRecord(printInfos, matched, unknownTemplateArray);
-                    if(id > 0) {
-                        concurrentHashMap.putIfAbsent("match", id);
-                        taskExecutor.shutdownNow();
-                    }
-                });
-                thread.setName("Thread" + counter++);
-                taskExecutor.submit(thread);
-            }
-            taskExecutor.shutdown();
-            try {
-                taskExecutor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
-            } catch (InterruptedException ignored) {}
-
-            if(concurrentHashMap.get("match") != null) return concurrentHashMap.get("match");
-            return 0;
-
-        } catch (Exception ex) {
-            logger.log(Logger.Level.FATAL, ex);
+        List<String> toMatch;
+        if(input.getFingerPrintTemplates() != null && input.getFingerPrintTemplates().size() >0){
+           toMatch = input.getFingerPrintTemplates() ;
+        }else{
+            toMatch = new ArrayList<>();
+            toMatch.add(input.getFingerPrintTemplate());
         }
 
+        final int[] matchedRecord = {0};
+        if(toMatch != null && toMatch.size()>0) {
+            ConcurrentHashMap<String, Integer> concurrentHashMap = new ConcurrentHashMap<>();
+            try {
+                ExecutorService taskExecutor;
+                if(override){
+                    taskExecutor = Executors.newFixedThreadPool(num);
+                }else{
+                    taskExecutor = Executors.newFixedThreadPool(toMatch.size());
+                }
+
+                int counter = 0;
+                if (jsgFPLib == null) initializeDevice();
+                boolean[] matched = new boolean[1];
+
+                logger.log(Logger.Level.INFO, "validating fingerprints");
+
+                List<List<FingerPrintInfo>> lists = Partition.ofSize(input.getFingerPrintTemplateListToMatch(), 1000);
+
+                for (String template : toMatch) {
+                    Thread thread = new Thread(() -> {
+                        try {
+                            byte[] unknownTemplateArray = Base64.getDecoder().decode(template);
+                            for (List<FingerPrintInfo> printInfos : lists) {
+                                int id = getMatchedRecord(printInfos, matched, unknownTemplateArray);
+                                if (id > 0) {
+                                    concurrentHashMap.putIfAbsent("match", id);
+                                    taskExecutor.shutdownNow();
+                                }
+                            }
+
+                        } catch (Exception ex) {
+                            logger.log(Logger.Level.FATAL, ex);
+                        }
+                    });
+                    thread.setName("Thread" + counter++);
+                    taskExecutor.submit(thread);
+                    taskExecutor.shutdown();
+                    try {
+                        taskExecutor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+                    } catch (InterruptedException ignored) {
+                    }
+                }
+                if (concurrentHashMap.get("match") != null) return concurrentHashMap.get("match");
+            }catch (Exception ex){
+                if (concurrentHashMap.get("match") != null) return concurrentHashMap.get("match");
+            }
+        }
         return matchedRecord[0];
     }
 

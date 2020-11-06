@@ -152,6 +152,19 @@ public class DbManager {
 
     }
 
+    public Set<Integer> getPatientsWithoutFingerPrintData() throws Exception {
+    String sql = "select distinct p.patient_id from patient p where p.patient_id not in (SELECT distinct b.patient_id from " + TABLENAME +" b)" +
+            "and p.voided = false";
+
+        ppStatement = getConnection().prepareStatement(sql);
+
+        resultSet = ppStatement.executeQuery();
+        Set<Integer> printInfos =  convertToDistinctList(resultSet);
+        this.closeConnection();
+        return printInfos;
+
+    }
+
     public Set<Integer> getPatientsWithInvalidData() throws Exception {
 
         String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template," +
@@ -164,6 +177,19 @@ public class DbManager {
         Set<Integer> printInfos =  convertToDistinctFingerPrintList(resultSet, true);
         this.closeConnection();
         return printInfos;
+
+    }
+
+    private Set<Integer> convertToDistinctList(ResultSet resultSet) throws SQLException {
+
+        Set<Integer> patientIds = new HashSet<>();
+
+        while (resultSet.next()) {
+            if(resultSet.getString("patient_id") != null) {
+                patientIds.add(Integer.parseInt(resultSet.getString("patient_id")));
+            }
+        }
+        return patientIds;
 
     }
 
