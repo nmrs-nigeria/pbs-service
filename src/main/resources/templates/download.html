@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="">
+    <meta name="author" content="wande">
+    <link rel="icon"  th:href="@{/img/openmrs-favicon.ico}">
+
+    <title>Downloads</title>
+
+
+    <!-- Bootstrap core CSS -->
+    <link th:href="@{/styles/css/bootstrap.min.css}" rel="stylesheet" />
+
+    <!-- Custom styles for this template -->
+    <link th:href="@{/styles/css/signin.css}" rel="stylesheet">
+</head>
+
+<body class="text-center">
+<form class="form-signin">
+    <h1 class="h3 mb-3 font-weight-normal">Download Patient Data</h1>
+    <a th:href="@{|/download?path=invalid|}" class="btn btn-primary btn-block"  target="_blank">Patients with Invalid fingerprints</a>
+    <a th:href="@{|/download?path=lowQuality|}" class="btn btn-primary btn-block"  target="_blank">Patients with low quality fingerprints</a>
+    <p class="mt-5 mb-3 text-muted">&copy; 2020</p>
+</form>
+</body>
+</html>

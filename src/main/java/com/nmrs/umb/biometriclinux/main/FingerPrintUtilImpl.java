@@ -5,18 +5,15 @@
  */
 package com.nmrs.umb.biometriclinux.main;
 
-import SecuGen.FDxSDKPro.jni.JSGFPLib;
-import SecuGen.FDxSDKPro.jni.SGDeviceInfoParam;
-import SecuGen.FDxSDKPro.jni.SGFDxDeviceName;
-import SecuGen.FDxSDKPro.jni.SGFDxErrorCode;
-import SecuGen.FDxSDKPro.jni.SGFDxSecurityLevel;
-import SecuGen.FDxSDKPro.jni.SGFDxTemplateFormat;
-import SecuGen.FDxSDKPro.jni.SGFingerInfo;
-import SecuGen.FDxSDKPro.jni.SGISOTemplateInfo;
-import SecuGen.FDxSDKPro.jni.SGImpressionType;
+import SecuGen.FDxSDKPro.jni.*;
 import com.nmrs.umb.biometriclinux.models.AppModel;
 import com.nmrs.umb.biometriclinux.models.FingerPrintInfo;
 import com.nmrs.umb.biometriclinux.models.FingerPrintMatchInputModel;
+import org.jboss.logging.Logger;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.util.*;
@@ -24,10 +21,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import javax.imageio.ImageIO;
-import org.jboss.logging.Logger;
-import org.springframework.stereotype.Component;
 
 /**
  *
@@ -42,7 +35,11 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
     private byte[] imageTemplate;
     private boolean isDeviceOpen = false;
     private static String OS = System.getProperty("os.name").toLowerCase();
-    
+
+    @Value("${num.of.threads:1}")
+    private String numberOfThreads;
+
+
 
     Logger logger = Logger.getLogger(FingerPrintUtilImpl.class);
 
@@ -55,14 +52,17 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
                 initializeDevice();
             }
 
+            if(deviceInfo.imageHeight == 0 || deviceInfo.imageWidth == 0) initializeDevice();
             BufferedImage bufferedImage = new BufferedImage(deviceInfo.imageWidth, deviceInfo.imageHeight, BufferedImage.TYPE_BYTE_GRAY);
             byte[] imageBuffer1 = ((java.awt.image.DataBufferByte) bufferedImage.getRaster().getDataBuffer()).getData();
             if (jsgFPLib != null) {
                 long erorCode = jsgFPLib.GetImageEx(imageBuffer1, 10000, 0, 50);
                 if (erorCode == SGFDxErrorCode.SGFDX_ERROR_NONE) {
-
+                    
                     return captureFingerPrint(bufferedImage, imageBuffer1, fingerPosition, err, populateImagebytes);
                 } else {
+                    logger.log(Logger.Level.INFO, "Failed to get image "+ erorCode);
+                    logger.log(Logger.Level.INFO, "trying again");
 
                     jsgFPLib.Close();
                     initializeDevice();
@@ -77,6 +77,7 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
                 
             }
         } catch (Exception ex) {
+            initializeDevice();
             FingerPrintInfo fingerPrintInfo = new FingerPrintInfo();
             fingerPrintInfo.setErrorMessage(ex.getMessage());
             return fingerPrintInfo;
@@ -90,8 +91,11 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
         try {
             int[] qualityArray = new int[1];
             int quality = 0;
-            long nfiqvalue;
-            imageTemplate = new byte[deviceInfo.imageWidth*deviceInfo.imageHeight];
+            int[] max = new int[1];
+            jsgFPLib.GetMaxTemplateSize(max);
+            logger.log(Logger.Level.INFO, "Template Size" + max[0]);
+
+            imageTemplate = new byte[max[0]];
 
             jsgFPLib.GetImageQuality(deviceInfo.imageWidth, deviceInfo.imageHeight, imageBuffer1, qualityArray);
 
@@ -139,45 +143,81 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
         return null;
     }
 
+//    //to verify ISO Templates
+//    @Override
+//    public int verify(FingerPrintMatchInputModel input) {
+//        return oldVerify(input);
+//    }
     //to verify ISO Templates
     @Override
     public int verify(FingerPrintMatchInputModel input) {
-        ExecutorService taskExecutor = Executors.newFixedThreadPool(20);
-        ConcurrentHashMap<String, Integer> concurrentHashMap = new ConcurrentHashMap<>();
-
-        int counter = 0;
-        if(jsgFPLib == null)  initializeDevice();
-        final int[] matchedRecord = {0};
-        boolean[] matched = new boolean[1];
-
-        List<List<FingerPrintInfo>> lists = Partition.ofSize(input.getFingerPrintTemplateListToMatch(), 1000);
-
-        try {
-            byte[] unknownTemplateArray = Base64.getDecoder().decode(input.getFingerPrintTemplate());
-
-            for(List<FingerPrintInfo> printInfos : lists) {
-                Thread thread = new Thread(() -> {
-                    int id = getMatchedRecord(printInfos, matched, unknownTemplateArray);
-                    if(id > 0) {
-                        concurrentHashMap.putIfAbsent("match", id);
-                        taskExecutor.shutdownNow();
-                    }
-                });
-                thread.setName("Thread" + counter++);
-                taskExecutor.submit(thread);
-            }
-            taskExecutor.shutdown();
+        int num = 1;
+        boolean override = false;
+        if(numberOfThreads != null || !numberOfThreads.isEmpty()){
             try {
-                taskExecutor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
-            } catch (InterruptedException ignored) {}
-
-            if(concurrentHashMap.get("match") != null) return concurrentHashMap.get("match");
-            return 0;
-
-        } catch (Exception ex) {
-            logger.log(Logger.Level.FATAL, ex);
+                num = Integer.parseInt(numberOfThreads);
+                override = true;
+            }catch (Exception ex){
+                logger.log(Logger.Level.INFO, "invalid number of threads - "+ex);
+                num = 1;
+            }
+        }
+        List<String> toMatch;
+        if(input.getFingerPrintTemplates() != null && input.getFingerPrintTemplates().size() >0){
+           toMatch = input.getFingerPrintTemplates() ;
+        }else{
+            toMatch = new ArrayList<>();
+            toMatch.add(input.getFingerPrintTemplate());
         }
 
+        final int[] matchedRecord = {0};
+        if(toMatch != null && toMatch.size()>0) {
+            ConcurrentHashMap<String, Integer> concurrentHashMap = new ConcurrentHashMap<>();
+            try {
+                ExecutorService taskExecutor;
+                if(override){
+                    taskExecutor = Executors.newFixedThreadPool(num);
+                }else{
+                    taskExecutor = Executors.newFixedThreadPool(toMatch.size());
+                }
+
+                int counter = 0;
+                if (jsgFPLib == null) initializeDevice();
+                boolean[] matched = new boolean[1];
+
+                logger.log(Logger.Level.INFO, "validating fingerprints");
+
+                List<List<FingerPrintInfo>> lists = Partition.ofSize(input.getFingerPrintTemplateListToMatch(), 1000);
+
+                for (String template : toMatch) {
+                    Thread thread = new Thread(() -> {
+                        try {
+                            byte[] unknownTemplateArray = Base64.getDecoder().decode(template);
+                            for (List<FingerPrintInfo> printInfos : lists) {
+                                int id = getMatchedRecord(printInfos, matched, unknownTemplateArray);
+                                if (id > 0) {
+                                    concurrentHashMap.putIfAbsent("match", id);
+                                    taskExecutor.shutdownNow();
+                                }
+                            }
+
+                        } catch (Exception ex) {
+                            logger.log(Logger.Level.FATAL, ex);
+                        }
+                    });
+                    thread.setName("Thread" + counter++);
+                    taskExecutor.submit(thread);
+                    taskExecutor.shutdown();
+                    try {
+                        taskExecutor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+                    } catch (InterruptedException ignored) {
+                    }
+                }
+                if (concurrentHashMap.get("match") != null) return concurrentHashMap.get("match");
+            }catch (Exception ex){
+                if (concurrentHashMap.get("match") != null) return concurrentHashMap.get("match");
+            }
+        }
         return matchedRecord[0];
     }
 
@@ -196,17 +236,33 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
         return 0;
     }
 
+    public boolean isValid(String template) {
+        if(jsgFPLib == null)  initializeDevice();
+        byte[] fingerTemplate = Base64.getDecoder().decode(template);
+        int[] templateSize = new int[1];
+        int[] maxSize = new int[1];
+        jsgFPLib.GetTemplateSize(fingerTemplate,templateSize);
+        jsgFPLib.GetMaxTemplateSize(maxSize);
+        return templateSize[0] > 0 && templateSize[0] <= maxSize[0];
+    }
+
     private int getMatchedRecord(List<FingerPrintInfo> fingerPrintInfos, boolean[] matched, byte[] unknownTemplateArray) {
         for (FingerPrintInfo each : fingerPrintInfos) {
-//            System.out.println("Checking : "+each.getPatienId());
+            int[] matchScore = new int[1];
             if(each.getTemplate() != null ){
+                logger.log(Logger.Level.INFO, "Checking against : "+each.getPatienId()+" finger: "+each.getFingerPositions().name());
              byte[] fingerTemplate = Base64.getDecoder().decode(each.getTemplate());
-                jsgFPLib.MatchIsoTemplate(fingerTemplate, 0, unknownTemplateArray, 0, SGFDxSecurityLevel.SL_NORMAL, matched);
-                if (matched[0]) {
-                    return each.getPatienId();
+                long iError = jsgFPLib.MatchIsoTemplate(fingerTemplate, 0, unknownTemplateArray, 0, SGFDxSecurityLevel.SL_ABOVE_NORMAL, matched);
+                if (iError == SGFDxErrorCode.SGFDX_ERROR_NONE) {
+                    if (matched[0]) {
+                        jsgFPLib.GetIsoMatchingScore(fingerTemplate,0,unknownTemplateArray,0,matchScore);
+                        logger.log(Logger.Level.INFO, "found match : " + each.getPatienId()+" score - "+matchScore[0]);
+                        return each.getPatienId();
+                    }
                 }
             }
         }
+        logger.log(Logger.Level.INFO, "no match found ");
         return 0;
     }
 
@@ -219,7 +275,7 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
 
         for (FingerPrintInfo each : input.getFingerPrintTemplateListToMatch()) {
             byte[] fingerTemplate = Base64.getDecoder().decode(each.getTemplate());
-            if (jsgFPLib.MatchTemplate(fingerTemplate, unknownTemplateArray, SGFDxSecurityLevel.SL_NORMAL, matched) == SGFDxErrorCode.SGFDX_ERROR_NONE) {
+            if (jsgFPLib.MatchTemplate(fingerTemplate, unknownTemplateArray, SGFDxSecurityLevel.SL_ABOVE_NORMAL, matched) == SGFDxErrorCode.SGFDX_ERROR_NONE) {
                 if (matched[0]) {
                     matchedRecord = each.getPatienId();
                     break;
@@ -228,28 +284,19 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
         }
         return matchedRecord;
     }
-
     private void initializeDevice() {
-
         jsgFPLib = new JSGFPLib();
-
         deviceInfo = new SGDeviceInfoParam();
-
         if (jsgFPLib.Init(SGFDxDeviceName.SG_DEV_AUTO) == SGFDxErrorCode.SGFDX_ERROR_NONE) {
-
             if (jsgFPLib.OpenDevice(SGFDxDeviceName.SG_DEV_AUTO) == SGFDxErrorCode.SGFDX_ERROR_NONE) {
                 jsgFPLib.GetDeviceInfo(deviceInfo);
-
                 logger.log(Logger.Level.INFO, "Device opened successfully");
                 jsgFPLib.SetTemplateFormat(SGFDxTemplateFormat.TEMPLATE_FORMAT_ISO19794);
                 isDeviceOpen = true;
-
             }
-
-        } else {
+        }else {
             throw new IllegalStateException("Device fail to initialize");
         }
-
     }
 
     private String convertBytetoImage(BufferedImage bImage2) {
