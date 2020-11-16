@@ -31,22 +31,24 @@ public class DownloadController {
 		String filename = null;
 		ByteArrayInputStream byteArrayInputStream = null;
 		try {
+			String datimCode = dbManager.getGlobalProperty("facility_datim_code");
 			if (path != null && path.equalsIgnoreCase("invalid")) {
 				filename = "Patients_with_invalid_fingerprint_data.csv";
 				Set<Integer> invalids = dbManager.getPatientsWithInvalidData();
-				byteArrayInputStream = dbManager.getCsvFilePath(invalids);
+				 if (invalids.size() > 0) byteArrayInputStream = dbManager.getCsvFilePath(invalids, datimCode);
 			} else if (path != null && path.equalsIgnoreCase("lowQuality")) {
 				filename = "Patients_with_low_quality_fingerprint_data.csv";
 				Set<Integer> lowQuality = dbManager.getPatientsWithLowQualityData();
-				byteArrayInputStream = dbManager.getCsvFilePath(lowQuality);
+				if (lowQuality.size() > 0)  byteArrayInputStream = dbManager.getCsvFilePath(lowQuality, datimCode);
 			} else if (path != null && path.equalsIgnoreCase("both")) {
-				filename = "Patients_fingerprint_data.csv";
+				String facilityName = dbManager.getGlobalProperty("Facility_Name");
+				filename = datimCode+"_"+facilityName+"_patients_fingerprint_data.csv";
 				Set<Integer> invalids = dbManager.getPatientsWithInvalidData();
 				Set<Integer> lowQuality = dbManager.getPatientsWithLowQualityData();
 				Set<Integer> none = dbManager.getPatientsWithoutFingerPrintData();
 				invalids.addAll(lowQuality);
 				invalids.addAll(none);
-				byteArrayInputStream = dbManager.getCsvFilePath(invalids);
+				if (invalids.size() > 0)  byteArrayInputStream = dbManager.getCsvFilePath(invalids, datimCode);
 			}
 			if(byteArrayInputStream != null) {
 				InputStreamResource file = new InputStreamResource(byteArrayInputStream);
@@ -67,7 +69,8 @@ public class DownloadController {
 				e.printStackTrace();
 			}
 		}
-		return null;
+		return  ResponseEntity.ok()
+				.body("No patient Data");
 	}
 
 }

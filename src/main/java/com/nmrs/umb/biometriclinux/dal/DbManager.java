@@ -228,9 +228,13 @@ public class DbManager {
         List<Patient> patients = new ArrayList<>();
         while (resultSet.next()) {
             Patient patient = new Patient();
-            patient.setId(resultSet.getString("patient_id"));
-            patient.setIdentifier(resultSet.getString("identifier"));
+            patient.setPatientId(resultSet.getString("PatientId"));
             patient.setName(resultSet.getString("Name"));
+            patient.setGender(resultSet.getString("Gender"));
+            patient.setBirthDate(resultSet.getString("BirthDate"));
+            patient.setAge(resultSet.getString("Age"));
+            patient.setPepFarID(resultSet.getString("PepfarID"));
+            patient.setHospID(resultSet.getString("HospID"));
             patients.add(patient);
         }
         return patients;
@@ -267,14 +271,16 @@ public class DbManager {
         return fingerPrintInfo;
     }
 
-    public ByteArrayInputStream getCsvFilePath(Set<Integer> patientIds){
+    public ByteArrayInputStream getCsvFilePath(Set<Integer> patientIds, String datimCode){
        try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
-            try (final CSVPrinter printer = new CSVPrinter(new PrintWriter(out), CSVFormat.DEFAULT.withHeader("Patient Id", "Name", "Identifier"))) {
+            try (final CSVPrinter printer = new CSVPrinter(new PrintWriter(out),
+                    CSVFormat.DEFAULT.withHeader("Patient Id", "Name", "Gender", "BirthDate", "Age", "PepfarID", "HospID", "DatimCode"))) {
                 for(Integer patientId:patientIds) {
                     Patient patient = getPatientDetails(patientId);
                     if(patient != null) {
-                        printer.printRecord(patient.getId(), patient.getName(), patient.getIdentifier());
+                        printer.printRecord(patient.getPatientId(), patient.getName(), patient.getGender(),
+                                patient.getBirthDate(), patient.getAge(), patient.getPepFarID(), patient.getHospID(), datimCode);
                     }
                 }
                 printer.flush();
@@ -348,10 +354,43 @@ public class DbManager {
     }
 
     public Patient getPatientDetails(Integer patientId) throws Exception {
-        String sql = "SELECT p.person_id as patient_id, CONCAT(pn.family_name,' ', pn.given_name) as Name, " +
-                "pi.identifier as identifier from person p, person_name pn, patient_identifier pi " +
-                "where p.person_id = pn.person_id and p.person_id = pi.patient_id and pi.identifier_type = 4 " +
-                "and p.person_id = ?;";
+        String sql = "SELECT " +
+                "    AA.PatientId," +
+                "    AA.Name," +
+                "    AA.Gender," +
+                "    AA.BirthDate," +
+                "    AA.Age," +
+                "    BB.PepfarID," +
+                "    BB.HospID" +
+                "FROM" +
+                "    (SELECT " +
+                "        p.person_id AS PatientId," +
+                "            CONCAT(pn.family_name, ' ', pn.given_name) AS Name," +
+                "            IF(p.gender = 'M', 'MALE', 'FEMALE') AS Gender," +
+                "            IF(p.birthdate_estimated IS NOT TRUE, p.birthdate, 'Estimated') AS BirthDate," +
+                "            TIMESTAMPDIFF(YEAR, p.birthdate, CURDATE()) AS Age" +
+                "    FROM" +
+                "        person p, person_name pn" +
+                "    WHERE" +
+                "        p.person_id = pn.person_id" +
+                "            AND p.person_id = ?) AA" +
+                "        LEFT JOIN" +
+                "    (SELECT " +
+                "        a.patient_id, a.pepfar AS PepfarID, b.hos AS HospID" +
+                "    FROM" +
+                "        ((SELECT " +
+                "        patient_id, identifier AS pepfar" +
+                "    FROM" +
+                "        patient_identifier" +
+                "    WHERE" +
+                "        identifier_type = 4) a" +
+                "    LEFT JOIN (SELECT " +
+                "        patient_id, identifier AS hos" +
+                "    FROM" +
+                "        patient_identifier" +
+                "    WHERE" +
+                "        identifier_type = 5) b ON a.patient_id = b.patient_id)" +
+                "    GROUP BY a.patient_id) BB ON AA.PatientId = BB.patient_id";
 
         ppStatement = getConnection().prepareStatement(sql);
         ppStatement.setInt(1, patientId);
@@ -489,5 +528,14 @@ public class DbManager {
 
         return ppStatement.executeUpdate();
     }
-    
+
+    public String getGlobalProperty(String property) throws Exception {
+        ppStatement = getConnection().prepareStatement("SELECT property_value FROM global_property WHERE property = ?;");
+        ppStatement.setString(1, property);
+        resultSet = ppStatement.executeQuery();
+        while (resultSet.next()) {
+            return resultSet.getString("property_value");
+        }
+        return  null;
+    }
 }

@@ -9,25 +9,24 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.util.Date;
 
-/**
- *
- * @author Morrison Idiasirue <morrison.idiasirue@gmail.com>
- */
+
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class Patient {
 
+    public String patientId;
     public String name;
-    public String id;
-    public String identifier;
-    public String phoneNumber;
-    public Integer address;
+    public String gender;
+    public String birthDate;
+    public String Age;
+    public String pepFarID;
+    public String hospID;
 
-    public String getId() {
-        return id;
+    public String getPatientId() {
+        return patientId;
     }
 
-    public void setId(String id) {
-        this.id = id;
+    public void setPatientId(String patientId) {
+        this.patientId = patientId;
     }
 
     public String getName() {
@@ -38,27 +37,43 @@ public class Patient {
         this.name = name;
     }
 
-    public String getIdentifier() {
-        return identifier;
+    public String getGender() {
+        return gender;
     }
 
-    public void setIdentifier(String identifier) {
-        this.identifier = identifier;
+    public void setGender(String gender) {
+        this.gender = gender;
     }
 
-    public String getPhoneNumber() {
-        return phoneNumber;
+    public String getBirthDate() {
+        return birthDate;
     }
 
-    public void setPhoneNumber(String phoneNumber) {
-        this.phoneNumber = phoneNumber;
+    public void setBirthDate(String birthDate) {
+        this.birthDate = birthDate;
     }
 
-    public Integer getAddress() {
-        return address;
+    public String getAge() {
+        return Age;
     }
 
-    public void setAddress(Integer address) {
-        this.address = address;
+    public void setAge(String age) {
+        Age = age;
+    }
+
+    public String getPepFarID() {
+        return pepFarID;
+    }
+
+    public void setPepFarID(String pepFarID) {
+        this.pepFarID = pepFarID;
+    }
+
+    public String getHospID() {
+        return hospID;
+    }
+
+    public void setHospID(String hospID) {
+        this.hospID = hospID;
     }
 }
