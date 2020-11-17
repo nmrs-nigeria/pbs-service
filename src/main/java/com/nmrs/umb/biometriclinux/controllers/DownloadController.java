@@ -1,6 +1,9 @@
 package com.nmrs.umb.biometriclinux.controllers;
 
 import com.nmrs.umb.biometriclinux.dal.DbManager;
+import com.nmrs.umb.biometriclinux.models.FingerPrintInfo;
+import com.opencsv.bean.CsvToBean;
+import com.opencsv.bean.CsvToBeanBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
@@ -13,11 +16,20 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.Reader;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 @Controller
 public class DownloadController {
 
+    private static String PBS_UPLOAD_FOLDER = "C://pbs_upload/";
 	@Autowired
 	DbManager dbManager;
 
@@ -73,4 +85,42 @@ public class DownloadController {
 				.body("No patient Data");
 	}
 
+    @PostMapping("/upload")
+    public String uploadFile(@RequestParam("file") MultipartFile file,
+                                   RedirectAttributes redirectAttributes){
+        
+         if (file.isEmpty()) {
+            redirectAttributes.addFlashAttribute("message", "Please select a file to upload");
+            return "redirect:uploadStatus";
+        }
+         
+         try{
+             
+          byte[] bytes = file.getBytes();
+            Path path = Paths.get(PBS_UPLOAD_FOLDER + file.getOriginalFilename());
+            Files.write(path, bytes);
+            
+            Reader reader = Files.newBufferedReader(path);
+             CsvToBean<FingerPrintInfo> csvToBean = new CsvToBeanBuilder(reader)
+                     .withType(FingerPrintInfo.class)
+                     .withIgnoreLeadingWhiteSpace(true)
+                     .build();
+             
+             List<FingerPrintInfo> templateList = csvToBean.parse();
+             dbManager.SaveToDatabase(templateList, false);
+             
+         
+         }catch(Exception ex){
+         
+         }
+        
+        return null;
+    
+    }
+    
+    
+     @GetMapping("/uploadStatus")
+    public String uploadStatus() {
+        return "uploadStatus";
+    }
 }
