@@ -1,7 +1,9 @@
 package com.nmrs.umb.biometriclinux.controllers;
 
 import com.nmrs.umb.biometriclinux.dal.DbManager;
+import com.nmrs.umb.biometriclinux.security.FileEncrypterDecrypter;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.FileEncodingApplicationListener;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -11,6 +13,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+import javax.crypto.CipherInputStream;
+import javax.crypto.CipherOutputStream;
+import javax.crypto.KeyGenerator;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.Set;
@@ -51,7 +56,9 @@ public class DownloadController {
 				if (invalids.size() > 0)  byteArrayInputStream = dbManager.getCsvFilePath(invalids, datimCode);
 			}
 			if(byteArrayInputStream != null) {
-				InputStreamResource file = new InputStreamResource(byteArrayInputStream);
+				FileEncrypterDecrypter fileEncrypterDecrypter = new FileEncrypterDecrypter(KeyGenerator.getInstance("AES").generateKey(), "AES/CBC/PKCS5Padding");
+				CipherInputStream cipherInputStream = fileEncrypterDecrypter.encrypt(byteArrayInputStream);
+				InputStreamResource file = new InputStreamResource(cipherInputStream);
 
 				return ResponseEntity.ok()
 						.header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)

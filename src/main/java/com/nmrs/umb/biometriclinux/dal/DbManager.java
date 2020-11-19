@@ -275,14 +275,14 @@ public class DbManager {
        try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             try (final CSVPrinter printer = new CSVPrinter(new PrintWriter(out),
-                    CSVFormat.DEFAULT.withHeader("Patient Id", "Name", "Gender", "BirthDate", "Age", "PepfarID", "HospID", "DatimCode"))) {
-                for(Integer patientId:patientIds) {
-                    Patient patient = getPatientDetails(patientId);
-                    if(patient != null) {
-                        printer.printRecord(patient.getPatientId(), patient.getName(), patient.getGender(),
-                                patient.getBirthDate(), patient.getAge(), patient.getPepFarID(), patient.getHospID(), datimCode);
+                    CSVFormat.DEFAULT.withHeader("PatientID", "Name", "Gender", "BirthDate", "Age", "PepfarID", "HospID", "DatimCode"))) {
+                    List<Patient> patients = getPatientDetails(patientIds);
+                    for(Patient patient: patients) {
+                        if (patient != null) {
+                            printer.printRecord(patient.getPatientId(), patient.getName(), patient.getGender(),
+                                    patient.getBirthDate(), patient.getAge(), patient.getPepFarID(), patient.getHospID(), datimCode);
+                        }
                     }
-                }
                 printer.flush();
                 return new ByteArrayInputStream(out.toByteArray());
             }
@@ -353,7 +353,7 @@ public class DbManager {
         ppStatement.executeUpdate();
     }
 
-    public Patient getPatientDetails(Integer patientId) throws Exception {
+    public List<Patient> getPatientDetails(Set<Integer> patientIds) throws Exception {
         String sql = "SELECT " +
                 "    AA.PatientId," +
                 "    AA.Name," +
@@ -361,7 +361,7 @@ public class DbManager {
                 "    AA.BirthDate," +
                 "    AA.Age," +
                 "    BB.PepfarID," +
-                "    BB.HospID" +
+                "    BB.HospID " +
                 "FROM" +
                 "    (SELECT " +
                 "        p.person_id AS PatientId," +
@@ -373,7 +373,8 @@ public class DbManager {
                 "        person p, person_name pn" +
                 "    WHERE" +
                 "        p.person_id = pn.person_id" +
-                "            AND p.person_id = ?) AA" +
+                "            AND p.person_id in (" + String.join("", Collections.nCopies(patientIds.size()-1, "?,")) + "? )"+
+                ") AA" +
                 "        LEFT JOIN" +
                 "    (SELECT " +
                 "        a.patient_id, a.pepfar AS PepfarID, b.hos AS HospID" +
@@ -393,13 +394,16 @@ public class DbManager {
                 "    GROUP BY a.patient_id) BB ON AA.PatientId = BB.patient_id";
 
         ppStatement = getConnection().prepareStatement(sql);
-        ppStatement.setInt(1, patientId);
+        int i = 1;
+        for(Integer patientId :patientIds ) {
+            ppStatement.setInt(i, patientId);
+            i++;
+        }
 
         resultSet = ppStatement.executeQuery();
         List<Patient> patients = convertToPatientList(resultSet);
         this.closeConnection();
-        if (patients.size() > 0) return patients.get(0);
-        return null;
+        return patients;
     }
     
     public ResponseModel SaveToDatabase(List<FingerPrintInfo> fingerPrintList, boolean update) throws Exception {

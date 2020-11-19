@@ -43,6 +43,9 @@ public class FingerPrintController {
     @Value("${bulk.verify:false}")
     boolean bulkVerify;
 
+    @Value("${verify:true}")
+    boolean verify;
+
     @RequestMapping(value = "api/FingerPrint/CapturePrint")
     public ResponseEntity<FingerPrintInfo> CapturePrint(@RequestParam int fingerPosition) {
 
@@ -52,26 +55,26 @@ public class FingerPrintController {
 
         try {
             if (Objects.isNull(responseObject.getErrorMessage())) {
-                if(!bulkVerify) {
-                    dbManager.getConnection();
-                    System.out.println("getting all fingerprint in the database");
-                    List<FingerPrintInfo> allPrevious = dbManager.GetPatientBiometricinfo(0);
+                if(verify) {
+                    if (!bulkVerify) {
+                        dbManager.getConnection();
+                        System.out.println("getting all fingerprint in the database");
+                        List<FingerPrintInfo> allPrevious = dbManager.GetPatientBiometricinfo(0);
 
-                    int matchedPatientId = fingerPrintUtilImpl.verify(new FingerPrintMatchInputModel(responseObject.Template, allPrevious));
+                        int matchedPatientId = fingerPrintUtilImpl.verify(new FingerPrintMatchInputModel(responseObject.Template, allPrevious));
 
-                    if (matchedPatientId != 0) {
-                        String patientName = dbManager.RetrievePatientNameByPersonId(matchedPatientId);
+                        if (matchedPatientId != 0) {
+                            String patientName = dbManager.RetrievePatientNameByPersonId(matchedPatientId);
 
-                        String errString = MessageFormat.format("Finger print record already exist for this patient {0} Name : {1} {2} Person Identifier : {3} ",
-                                "\n", patientName, "\n", matchedPatientId);
-                        responseObject.setErrorMessage(errString);
-                    } else {
-                        responseObject.setErrorMessage("");
+                            String errString = MessageFormat.format("Finger print record already exist for this patient {0} Name : {1} {2} Person Identifier : {3} ",
+                                    "\n", patientName, "\n", matchedPatientId);
+                            responseObject.setErrorMessage(errString);
+                        }
                     }
-                } else {
-                    responseObject.setErrorMessage("");
                 }
             }
+
+            if (responseObject.getErrorMessage() == null)  responseObject.setErrorMessage("");
 
         } catch (Exception ex) {
             responseObject = new FingerPrintInfo();
@@ -98,24 +101,23 @@ public class FingerPrintController {
 
         try {
             if (responseObject != null && Objects.isNull(responseObject.getErrorMessage())) {
-                if(!bulkVerify) {
-                    dbManager.getConnection();
-                    List<FingerPrintInfo> allPrevious = dbManager.GetPatientBiometricInfoExcept(patientId);
+                if(verify) {
+                    if (!bulkVerify) {
+                        dbManager.getConnection();
+                        List<FingerPrintInfo> allPrevious = dbManager.GetPatientBiometricInfoExcept(patientId);
 
-                    int matchedPatientId = fingerPrintUtilImpl.verify(new FingerPrintMatchInputModel(responseObject.Template, allPrevious));
+                        int matchedPatientId = fingerPrintUtilImpl.verify(new FingerPrintMatchInputModel(responseObject.Template, allPrevious));
 
-                    if (matchedPatientId != 0) {
-                        String patientName = dbManager.RetrievePatientNameByPersonId(matchedPatientId);
+                        if (matchedPatientId != 0) {
+                            String patientName = dbManager.RetrievePatientNameByPersonId(matchedPatientId);
 
-                        String errString = MessageFormat.format("Finger print record already exist for this patient {0} Name : {1} {2} Person Identifier : {3}",
-                                "\n", patientName, "\n", matchedPatientId);
-                        responseObject.setErrorMessage(errString);
-                    } else {
-                        responseObject.setErrorMessage("");
+                            String errString = MessageFormat.format("Finger print record already exist for this patient {0} Name : {1} {2} Person Identifier : {3}",
+                                    "\n", patientName, "\n", matchedPatientId);
+                            responseObject.setErrorMessage(errString);
+                        }
                     }
-                }else {
-                    responseObject.setErrorMessage("");
                 }
+                if (responseObject.getErrorMessage() == null)  responseObject.setErrorMessage("");
             }
 
         } catch (Exception ex) {
@@ -191,7 +193,7 @@ public class FingerPrintController {
                     responseModel.setIsSuccessful(false);
                     return new ResponseEntity<>(responseModel, HttpStatus.BAD_REQUEST);
                 }
-                if(bulkVerify) {
+                if(bulkVerify && verify) {
                     String response = inDb(prints);
                     if (response != null) {
                         responseModel.setErrorMessage(response);
@@ -245,7 +247,7 @@ public class FingerPrintController {
                     responseModel.setIsSuccessful(false);
                     return new ResponseEntity<>(responseModel, HttpStatus.BAD_REQUEST);
                 }
-                if(bulkVerify) {
+                if(bulkVerify && verify) {
                     String response = inDb(prints);
                     if (response != null) {
                         responseModel.setErrorMessage(response);
