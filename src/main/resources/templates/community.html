@@ -21,8 +21,13 @@
 <form class="form-signin">
     <h1 class="h3 mb-3 font-weight-normal">Download Patient Data for Community</h1>
     <a th:href="@{|/download?path=both|}" class="btn btn-primary btn-block"  target="_blank">Download Patients data</a>
-    <a th:href="@{|/download?path=upload|}" class="btn btn-primary btn-block"  target="_blank">Upload</a>
-    <p class="mt-5 mb-3 text-muted">&copy; 2020</p>
+   
+   
 </form>
+    <form method="POST" action="/upload" enctype="multipart/form-data">
+    <input type="file" name="file" /><br/><br/>
+    <input type="submit" class="btn btn-dark btn-block" value="Upload" />
+</form>
+     <p class="mt-5 mb-3 text-muted">&copy; 2020</p>
 </body>
 </html>

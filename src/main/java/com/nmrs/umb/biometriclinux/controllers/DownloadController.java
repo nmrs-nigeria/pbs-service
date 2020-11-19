@@ -7,6 +7,7 @@ import com.nmrs.umb.biometriclinux.models.CaptureData;
 import com.nmrs.umb.biometriclinux.models.FingerPosition;
 import com.nmrs.umb.biometriclinux.models.FingerPrintInfo;
 import com.nmrs.umb.biometriclinux.models.UploadTemplate;
+import com.opencsv.bean.ColumnPositionMappingStrategy;
 import com.opencsv.bean.CsvToBean;
 import com.opencsv.bean.CsvToBeanBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +32,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
+import javax.servlet.ServletContext;
 import org.jboss.logging.Logger;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
@@ -38,12 +40,15 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 @Controller
 public class DownloadController {
 
-    private static final String PBS_UPLOAD_FOLDER = "C://pbs_upload/";
+    private static final String PBS_UPLOAD_FOLDER = "pbs_upload";
     Logger logger = Logger.getLogger(DownloadController.class);
     ObjectMapper mapper = new ObjectMapper();
 
     @Autowired
     DbManager dbManager;
+
+    @Autowired
+    ServletContext context;
 
     @GetMapping("/view")
     public String greeting() {
@@ -117,13 +122,16 @@ public class DownloadController {
         try {
 
             byte[] bytes = file.getBytes();
-            Path path = Paths.get(PBS_UPLOAD_FOLDER + file.getOriginalFilename());
+
+            Path path = Paths.get(context.getRealPath(context.getContextPath()) + PBS_UPLOAD_FOLDER + file.getOriginalFilename());
             Files.write(path, bytes);
 
             Reader reader = Files.newBufferedReader(path);
             CsvToBean<UploadTemplate> csvToBean = new CsvToBeanBuilder(reader)
-                    .withType(FingerPrintInfo.class)
+                    .withType(UploadTemplate.class)
                     .withIgnoreLeadingWhiteSpace(true)
+                    .withMappingStrategy(setColumMapping())
+                    .withSkipLines(1)//skip headers
                     .build();
 
             List<UploadTemplate> templateList = csvToBean.parse();
@@ -133,13 +141,21 @@ public class DownloadController {
                     List<FingerPrintInfo> fingerPrintInfos = constructPrints(a, captureData);
                     dbManager.SaveToDatabase(fingerPrintInfos, false);
                 } catch (IOException ex) {
+                    redirectAttributes.addFlashAttribute("message", "IOException occurred while processing file");
                     java.util.logging.Logger.getLogger(DownloadController.class.getName()).log(Level.SEVERE, null, ex);
+
                 } catch (Exception ex) {
+                    redirectAttributes.addFlashAttribute("message", "error occurred while processing file");
                     java.util.logging.Logger.getLogger(DownloadController.class.getName()).log(Level.SEVERE, null, ex);
+
                 }
             });
-            
-          redirectAttributes.addFlashAttribute("message",
+
+            if (redirectAttributes.getFlashAttributes().get("message") != null) {
+                return "redirect:uploadStatus";
+            }
+
+            redirectAttributes.addFlashAttribute("message",
                     "You successfully uploaded '" + file.getOriginalFilename() + "'");
 
         } catch (IOException | IllegalStateException ex) {
@@ -163,31 +179,41 @@ public class DownloadController {
 
             fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getLeft_index(), AppModel.FingerPositions.LeftIndex);
             fingerPrintInfos.add(fingerPrintInfo);
-        } else if (captureData.getLeft_middle() != null) {
+        } 
+        if (captureData.getLeft_middle() != null) {
             fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getLeft_middle(), AppModel.FingerPositions.LeftMiddle);
             fingerPrintInfos.add(fingerPrintInfo);
-        } else if (captureData.getLeft_small() != null) {
+        } 
+        
+        if (captureData.getLeft_small() != null) {
             fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getLeft_small(), AppModel.FingerPositions.LeftSmall);
             fingerPrintInfos.add(fingerPrintInfo);
-        } else if (captureData.getLeft_thumb() != null) {
+        } 
+        if (captureData.getLeft_thumb() != null) {
             fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getLeft_thumb(), AppModel.FingerPositions.LeftThumb);
             fingerPrintInfos.add(fingerPrintInfo);
-        } else if (captureData.getLeft_wedding() != null) {
+        } 
+        if (captureData.getLeft_wedding() != null) {
             fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getLeft_wedding(), AppModel.FingerPositions.LeftWedding);
             fingerPrintInfos.add(fingerPrintInfo);
-        } else if (captureData.getRight_index() != null) {
+        } 
+        if (captureData.getRight_index() != null) {
             fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getRight_index(), AppModel.FingerPositions.RightIndex);
             fingerPrintInfos.add(fingerPrintInfo);
-        } else if (captureData.getRight_middle() != null) {
+        } 
+        if (captureData.getRight_middle() != null) {
             fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getRight_middle(), AppModel.FingerPositions.RightMiddle);
             fingerPrintInfos.add(fingerPrintInfo);
-        } else if (captureData.getRight_small() != null) {
+        } 
+        if (captureData.getRight_small() != null) {
             fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getRight_small(), AppModel.FingerPositions.RightSmall);
             fingerPrintInfos.add(fingerPrintInfo);
-        } else if (captureData.getRight_thumb() != null) {
+        } 
+        if (captureData.getRight_thumb() != null) {
             fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getRight_thumb(), AppModel.FingerPositions.RightThumb);
             fingerPrintInfos.add(fingerPrintInfo);
-        } else if (captureData.getRight_wedding() != null) {
+        } 
+        if (captureData.getRight_wedding() != null) {
             fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getRight_wedding(), AppModel.FingerPositions.RightWedding);
             fingerPrintInfos.add(fingerPrintInfo);
         }
@@ -208,9 +234,19 @@ public class DownloadController {
         fingerPrintInfo.setImageWidth(fingerPosition.getImageWidth());
         fingerPrintInfo.setPatienId(Integer.parseInt(uploadTemplate.getPatientID()));
         fingerPrintInfo.setTemplate(fingerPosition.getTemplate());
+        fingerPrintInfo.setCreator(0);
 
         return fingerPrintInfo;
 
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static ColumnPositionMappingStrategy setColumMapping() {
+        ColumnPositionMappingStrategy strategy = new ColumnPositionMappingStrategy();
+        strategy.setType(UploadTemplate.class);
+        String[] columns = new String[]{"PatientID", "DatimCode", "CaptureData"};
+        strategy.setColumnMapping(columns);
+        return strategy;
     }
 
 }
