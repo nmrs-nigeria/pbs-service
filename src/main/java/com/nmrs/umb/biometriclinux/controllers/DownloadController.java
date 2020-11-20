@@ -67,7 +67,7 @@ public class DownloadController {
         ByteArrayOutputStream byteArrayOutputStream = null;
         try {
             String passcode = dbManager.getGlobalProperty("pbs_pass");
-            if(passcode.isEmpty()) passcode = "changeIt";
+            if(passcode == null || passcode.isEmpty()) passcode = "changeIt";
             secretKey = Key.getSecretKey(keystore, passcode);
             fileEncrypterDecrypter = new FileEncrypterDecrypter(secretKey, "AES/CBC/PKCS5Padding");
 
@@ -119,7 +119,7 @@ public class DownloadController {
             RedirectAttributes redirectAttributes) {
         try {
             String passcode = dbManager.getGlobalProperty("pbs_pass");
-            if(passcode.isEmpty()) passcode = "changeIt";
+            if(passcode == null || passcode.isEmpty()) passcode = "changeIt";
             secretKey = Key.getSecretKey(keystore, passcode);
             fileEncrypterDecrypter = new FileEncrypterDecrypter(secretKey, "AES/CBC/PKCS5Padding");
 
