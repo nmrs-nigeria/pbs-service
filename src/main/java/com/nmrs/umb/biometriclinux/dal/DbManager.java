@@ -271,7 +271,7 @@ public class DbManager {
         return fingerPrintInfo;
     }
 
-    public ByteArrayInputStream getCsvFilePath(Set<Integer> patientIds, String datimCode){
+    public ByteArrayOutputStream getCsvFilePath(Set<Integer> patientIds, String datimCode){
        try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             try (final CSVPrinter printer = new CSVPrinter(new PrintWriter(out),
@@ -284,7 +284,7 @@ public class DbManager {
                         }
                     }
                 printer.flush();
-                return new ByteArrayInputStream(out.toByteArray());
+                return out;
             }
         }
         catch (Exception ex) {

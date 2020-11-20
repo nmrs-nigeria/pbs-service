@@ -1,30 +1,60 @@
 package com.nmrs.umb.biometriclinux.controllers;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nmrs.umb.biometriclinux.dal.DbManager;
+import com.nmrs.umb.biometriclinux.models.*;
 import com.nmrs.umb.biometriclinux.security.FileEncrypterDecrypter;
+import com.nmrs.umb.biometriclinux.security.Key;
+import com.opencsv.bean.ColumnPositionMappingStrategy;
+import com.opencsv.bean.CsvToBean;
+import com.opencsv.bean.CsvToBeanBuilder;
+import org.jboss.logging.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.context.FileEncodingApplicationListener;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.InputStreamResource;
-import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import javax.crypto.CipherInputStream;
-import javax.crypto.CipherOutputStream;
-import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.servlet.ServletContext;
+import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
 import java.util.Set;
+import java.util.logging.Level;
 
 @Controller
 public class DownloadController {
 
-	@Autowired
-	DbManager dbManager;
+    private static final String PBS_UPLOAD_FOLDER = "pbs_upload/";
+    Logger logger = Logger.getLogger(DownloadController.class);
+    ObjectMapper mapper = new ObjectMapper();
+    SecretKey secretKey;
+    FileEncrypterDecrypter fileEncrypterDecrypter;
+
+    @Autowired
+    DbManager dbManager;
+
+    @Autowired
+    ServletContext context;
+
+    @Value("${keystore:pbsKeyStore}")
+    String keystore;
 
 	@GetMapping("/view")
 	public String greeting() {
@@ -33,18 +63,23 @@ public class DownloadController {
 
 	@GetMapping("/download")
 	public ResponseEntity<Object> getFile(@RequestParam(value="path") String path) {
-		String filename = null;
-		ByteArrayInputStream byteArrayInputStream = null;
-		try {
+        String filename = null;
+        ByteArrayOutputStream byteArrayOutputStream = null;
+        try {
+            String passcode = dbManager.getGlobalProperty("pbs_pass");
+            if(passcode.isEmpty()) passcode = "changeIt";
+            secretKey = Key.getSecretKey(keystore, passcode);
+            fileEncrypterDecrypter = new FileEncrypterDecrypter(secretKey, "AES/CBC/PKCS5Padding");
+
 			String datimCode = dbManager.getGlobalProperty("facility_datim_code");
 			if (path != null && path.equalsIgnoreCase("invalid")) {
 				filename = "Patients_with_invalid_fingerprint_data.csv";
 				Set<Integer> invalids = dbManager.getPatientsWithInvalidData();
-				 if (invalids.size() > 0) byteArrayInputStream = dbManager.getCsvFilePath(invalids, datimCode);
+				 if (invalids.size() > 0) byteArrayOutputStream = dbManager.getCsvFilePath(invalids, datimCode);
 			} else if (path != null && path.equalsIgnoreCase("lowQuality")) {
 				filename = "Patients_with_low_quality_fingerprint_data.csv";
 				Set<Integer> lowQuality = dbManager.getPatientsWithLowQualityData();
-				if (lowQuality.size() > 0)  byteArrayInputStream = dbManager.getCsvFilePath(lowQuality, datimCode);
+				if (lowQuality.size() > 0)  byteArrayOutputStream = dbManager.getCsvFilePath(lowQuality, datimCode);
 			} else if (path != null && path.equalsIgnoreCase("both")) {
 				String facilityName = dbManager.getGlobalProperty("Facility_Name");
 				filename = datimCode+"_"+facilityName+"_patients_fingerprint_data.csv";
@@ -53,11 +88,10 @@ public class DownloadController {
 				Set<Integer> none = dbManager.getPatientsWithoutFingerPrintData();
 				invalids.addAll(lowQuality);
 				invalids.addAll(none);
-				if (invalids.size() > 0)  byteArrayInputStream = dbManager.getCsvFilePath(invalids, datimCode);
+				if (invalids.size() > 0)  byteArrayOutputStream = dbManager.getCsvFilePath(invalids, datimCode);
 			}
-			if(byteArrayInputStream != null) {
-				FileEncrypterDecrypter fileEncrypterDecrypter = new FileEncrypterDecrypter(KeyGenerator.getInstance("AES").generateKey(), "AES/CBC/PKCS5Padding");
-				CipherInputStream cipherInputStream = fileEncrypterDecrypter.encrypt(byteArrayInputStream);
+			if(byteArrayOutputStream != null) {
+				CipherInputStream cipherInputStream = fileEncrypterDecrypter.encrypt(byteArrayOutputStream);
 				InputStreamResource file = new InputStreamResource(cipherInputStream);
 
 				return ResponseEntity.ok()
@@ -71,7 +105,7 @@ public class DownloadController {
 					.body(e.getMessage());
 		}finally {
 			try {
-				if(byteArrayInputStream != null) byteArrayInputStream.close();
+				if(byteArrayOutputStream != null) byteArrayOutputStream.close();
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
@@ -79,5 +113,151 @@ public class DownloadController {
 		return  ResponseEntity.ok()
 				.body("No patient Data");
 	}
+
+    @PostMapping("/upload")
+    public String uploadFile(@RequestParam("file") MultipartFile file,
+            RedirectAttributes redirectAttributes) {
+        try {
+            String passcode = dbManager.getGlobalProperty("pbs_pass");
+            if(passcode.isEmpty()) passcode = "changeIt";
+            secretKey = Key.getSecretKey(keystore, passcode);
+            fileEncrypterDecrypter = new FileEncrypterDecrypter(secretKey, "AES/CBC/PKCS5Padding");
+
+            if (file.isEmpty()) {
+                redirectAttributes.addFlashAttribute("message", "Please select a file to upload");
+                return "redirect:uploadStatus";
+            }
+
+
+            byte[] bytes = file.getBytes();
+            String fileName = context.getRealPath(context.getContextPath()) + PBS_UPLOAD_FOLDER + file.getOriginalFilename();
+            Path path = Paths.get(context.getRealPath(context.getContextPath()) + PBS_UPLOAD_FOLDER + file.getOriginalFilename());
+            Files.createDirectories(path.getParent());
+            Files.deleteIfExists(path);
+            Files.createFile(path);
+            Files.write(path, bytes);
+            BufferedReader reader = fileEncrypterDecrypter.decrypt(fileName);
+
+            CsvToBean<UploadTemplate> csvToBean = new CsvToBeanBuilder(reader)
+                    .withType(UploadTemplate.class)
+                    .withIgnoreLeadingWhiteSpace(true)
+                    .withMappingStrategy(setColumMapping())
+                    .withSkipLines(1)//skip headers
+                    .build();
+
+            List<UploadTemplate> templateList = csvToBean.parse();
+            templateList.stream().forEach(a -> {
+                try {
+                    CaptureData captureData = mapper.readValue(a.getCaptureData(), CaptureData.class);
+                    List<FingerPrintInfo> fingerPrintInfos = constructPrints(a, captureData);
+                    dbManager.SaveToDatabase(fingerPrintInfos, false);
+                } catch (IOException ex) {
+                    redirectAttributes.addFlashAttribute("message", "IOException occurred while processing file");
+                    java.util.logging.Logger.getLogger(DownloadController.class.getName()).log(Level.SEVERE, null, ex);
+
+                } catch (Exception ex) {
+                    redirectAttributes.addFlashAttribute("message", "error occurred while processing file");
+                    java.util.logging.Logger.getLogger(DownloadController.class.getName()).log(Level.SEVERE, null, ex);
+
+                }
+            });
+
+            if (redirectAttributes.getFlashAttributes().get("message") != null) {
+                return "redirect:uploadStatus";
+            }
+
+            redirectAttributes.addFlashAttribute("message",
+                    "You successfully uploaded '" + file.getOriginalFilename() + "'");
+
+        } catch (Exception ex) {
+            logger.debug(ex.getMessage());
+        }
+
+        return "redirect:/uploadStatus";
+
+    }
+
+    @GetMapping("/uploadStatus")
+    public String uploadStatus() {
+        return "uploadStatus";
+    }
+
+    private List<FingerPrintInfo> constructPrints(UploadTemplate uploadTemplate, CaptureData captureData) {
+        List<FingerPrintInfo> fingerPrintInfos = new ArrayList<>();
+        FingerPrintInfo fingerPrintInfo;
+
+        if (captureData.getLeft_index() != null) {
+
+            fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getLeft_index(), AppModel.FingerPositions.LeftIndex);
+            fingerPrintInfos.add(fingerPrintInfo);
+        } 
+        if (captureData.getLeft_middle() != null) {
+            fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getLeft_middle(), AppModel.FingerPositions.LeftMiddle);
+            fingerPrintInfos.add(fingerPrintInfo);
+        } 
+        
+        if (captureData.getLeft_small() != null) {
+            fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getLeft_small(), AppModel.FingerPositions.LeftSmall);
+            fingerPrintInfos.add(fingerPrintInfo);
+        } 
+        if (captureData.getLeft_thumb() != null) {
+            fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getLeft_thumb(), AppModel.FingerPositions.LeftThumb);
+            fingerPrintInfos.add(fingerPrintInfo);
+        } 
+        if (captureData.getLeft_wedding() != null) {
+            fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getLeft_wedding(), AppModel.FingerPositions.LeftWedding);
+            fingerPrintInfos.add(fingerPrintInfo);
+        } 
+        if (captureData.getRight_index() != null) {
+            fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getRight_index(), AppModel.FingerPositions.RightIndex);
+            fingerPrintInfos.add(fingerPrintInfo);
+        } 
+        if (captureData.getRight_middle() != null) {
+            fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getRight_middle(), AppModel.FingerPositions.RightMiddle);
+            fingerPrintInfos.add(fingerPrintInfo);
+        } 
+        if (captureData.getRight_small() != null) {
+            fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getRight_small(), AppModel.FingerPositions.RightSmall);
+            fingerPrintInfos.add(fingerPrintInfo);
+        } 
+        if (captureData.getRight_thumb() != null) {
+            fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getRight_thumb(), AppModel.FingerPositions.RightThumb);
+            fingerPrintInfos.add(fingerPrintInfo);
+        } 
+        if (captureData.getRight_wedding() != null) {
+            fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getRight_wedding(), AppModel.FingerPositions.RightWedding);
+            fingerPrintInfos.add(fingerPrintInfo);
+        }
+
+        return fingerPrintInfos;
+
+    }
+
+    private FingerPrintInfo constructPrintPerPosition(UploadTemplate uploadTemplate,
+            FingerPosition fingerPosition, AppModel.FingerPositions fingerPositions) {
+        FingerPrintInfo fingerPrintInfo = new FingerPrintInfo();
+
+        fingerPrintInfo.setDateCreated(new Date());
+        fingerPrintInfo.setFingerPositions(fingerPositions);
+        fingerPrintInfo.setImageDPI(fingerPosition.getImageDpi());
+        fingerPrintInfo.setImageHeight(fingerPosition.getImageHeight());
+        fingerPrintInfo.setImageQuality(fingerPosition.getQuality());
+        fingerPrintInfo.setImageWidth(fingerPosition.getImageWidth());
+        fingerPrintInfo.setPatienId(Integer.parseInt(uploadTemplate.getPatientID()));
+        fingerPrintInfo.setTemplate(fingerPosition.getTemplate());
+        fingerPrintInfo.setCreator(0);
+
+        return fingerPrintInfo;
+
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static ColumnPositionMappingStrategy setColumMapping() {
+        ColumnPositionMappingStrategy strategy = new ColumnPositionMappingStrategy();
+        strategy.setType(UploadTemplate.class);
+        String[] columns = new String[]{"PatientID", "DatimCode", "CaptureData"};
+        strategy.setColumnMapping(columns);
+        return strategy;
+    }
 
 }

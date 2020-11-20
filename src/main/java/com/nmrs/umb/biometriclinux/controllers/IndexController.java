@@ -38,8 +38,8 @@ public class IndexController {
 
 
 
-    @Autowired
-    BuildProperties buildProperties;
+//    @Autowired
+//    BuildProperties buildProperties;
 
     @RequestMapping(value = "/")
     public String status() {
@@ -77,7 +77,7 @@ public class IndexController {
         dbModel.setdBName(env.getProperty("app.dbname"));
         dbModel.setPort(env.getProperty("server.port"));
         dbModel.setDbPort(env.getProperty("app.dbport"));
-       dbModel.setAppVersion(buildProperties.getVersion());
+//       dbModel.setAppVersion(buildProperties.getVersion());
 
         return dbModel;
     }

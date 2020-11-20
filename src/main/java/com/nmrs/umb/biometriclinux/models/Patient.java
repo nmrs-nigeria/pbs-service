@@ -20,6 +20,15 @@ public class Patient {
     public String Age;
     public String pepFarID;
     public String hospID;
+    public String datimCode;
+
+    public String getDatimCode() {
+        return datimCode;
+    }
+
+    public void setDatimCode(String datimCode) {
+        this.datimCode = datimCode;
+    }
 
     public String getPatientId() {
         return patientId;
