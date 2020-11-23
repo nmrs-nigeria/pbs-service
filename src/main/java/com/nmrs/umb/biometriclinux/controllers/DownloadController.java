@@ -2,9 +2,11 @@ package com.nmrs.umb.biometriclinux.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nmrs.umb.biometriclinux.dal.DbManager;
+import com.nmrs.umb.biometriclinux.main.FingerPrintUtilImpl;
 import com.nmrs.umb.biometriclinux.models.*;
 import com.nmrs.umb.biometriclinux.security.FileEncrypterDecrypter;
 import com.nmrs.umb.biometriclinux.security.Key;
+import com.nmrs.umb.biometriclinux.security.Utils;
 import com.opencsv.bean.ColumnPositionMappingStrategy;
 import com.opencsv.bean.CsvToBean;
 import com.opencsv.bean.CsvToBeanBuilder;
@@ -53,6 +55,12 @@ public class DownloadController {
     @Autowired
     ServletContext context;
 
+    @Autowired
+    FingerPrintUtilImpl fingerPrintUtilImpl;
+
+    @Value("${verify:false}")
+    boolean verify;
+
     @Value("${keystore:pbsKeyStore}")
     String keystore;
 
@@ -67,9 +75,9 @@ public class DownloadController {
         ByteArrayOutputStream byteArrayOutputStream = null;
         try {
             String passcode = dbManager.getGlobalProperty("pbs_pass");
-            if(passcode == null || passcode.isEmpty()) passcode = "changeIt";
+            if(passcode == null || passcode.isEmpty()) passcode = "changeit";
             secretKey = Key.getSecretKey(keystore, passcode);
-            fileEncrypterDecrypter = new FileEncrypterDecrypter(secretKey, "AES/CBC/PKCS5Padding");
+            if(secretKey != null) fileEncrypterDecrypter = new FileEncrypterDecrypter(secretKey, "AES/CBC/PKCS5Padding");
 
 			String datimCode = dbManager.getGlobalProperty("facility_datim_code");
 			if (path != null && path.equalsIgnoreCase("invalid")) {
@@ -82,7 +90,8 @@ public class DownloadController {
 				if (lowQuality.size() > 0)  byteArrayOutputStream = dbManager.getCsvFilePath(lowQuality, datimCode);
 			} else if (path != null && path.equalsIgnoreCase("both")) {
 				String facilityName = dbManager.getGlobalProperty("Facility_Name");
-				filename = datimCode+"_"+facilityName+"_patients_fingerprint_data.csv";
+				facilityName = facilityName.replaceAll(" ","_");
+				filename = datimCode+"-"+facilityName+"-patients-fingerprint-data.csv";
 				Set<Integer> invalids = dbManager.getPatientsWithInvalidData();
 				Set<Integer> lowQuality = dbManager.getPatientsWithLowQualityData();
 				Set<Integer> none = dbManager.getPatientsWithoutFingerPrintData();
@@ -91,12 +100,18 @@ public class DownloadController {
 				if (invalids.size() > 0)  byteArrayOutputStream = dbManager.getCsvFilePath(invalids, datimCode);
 			}
 			if(byteArrayOutputStream != null) {
-				CipherInputStream cipherInputStream = fileEncrypterDecrypter.encrypt(byteArrayOutputStream);
-				InputStreamResource file = new InputStreamResource(cipherInputStream);
+                InputStreamResource file;
+			    if(fileEncrypterDecrypter != null) {
+                    CipherInputStream cipherInputStream = fileEncrypterDecrypter.encrypt(byteArrayOutputStream);
+                    file = new InputStreamResource(cipherInputStream);
+                }else{
+                    ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(byteArrayOutputStream.toByteArray());
+                    file = new InputStreamResource(byteArrayInputStream);
+                }
 
 				return ResponseEntity.ok()
 						.header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
-						.contentType(MediaType.parseMediaType("application/csv"))
+						.contentType(MediaType.parseMediaType("text/csv"))
 						.body(file);
 			}
 		}catch (Exception e){
@@ -115,28 +130,32 @@ public class DownloadController {
 	}
 
     @PostMapping("/upload")
-    public String uploadFile(@RequestParam("file") MultipartFile file,
+    public ResponseEntity<Object>  uploadFile(@RequestParam("file") MultipartFile file,
             RedirectAttributes redirectAttributes) {
         try {
             String passcode = dbManager.getGlobalProperty("pbs_pass");
-            if(passcode == null || passcode.isEmpty()) passcode = "changeIt";
+            if(passcode == null || passcode.isEmpty()) passcode = "changeit";
             secretKey = Key.getSecretKey(keystore, passcode);
-            fileEncrypterDecrypter = new FileEncrypterDecrypter(secretKey, "AES/CBC/PKCS5Padding");
+            if(secretKey != null) fileEncrypterDecrypter = new FileEncrypterDecrypter(secretKey, "AES/CBC/PKCS5Padding");
 
             if (file.isEmpty()) {
-                redirectAttributes.addFlashAttribute("message", "Please select a file to upload");
-                return "redirect:uploadStatus";
+               return  ResponseEntity.ok()
+                        .body("Please select a file to upload");
             }
-
 
             byte[] bytes = file.getBytes();
             String fileName = context.getRealPath(context.getContextPath()) + PBS_UPLOAD_FOLDER + file.getOriginalFilename();
-            Path path = Paths.get(context.getRealPath(context.getContextPath()) + PBS_UPLOAD_FOLDER + file.getOriginalFilename());
+            Path path = Paths.get(fileName);
             Files.createDirectories(path.getParent());
             Files.deleteIfExists(path);
             Files.createFile(path);
             Files.write(path, bytes);
-            BufferedReader reader = fileEncrypterDecrypter.decrypt(fileName);
+            BufferedReader reader = null;
+            if(fileEncrypterDecrypter != null) {
+                reader = fileEncrypterDecrypter.decrypt(fileName);
+            }else{
+                reader = Files.newBufferedReader(path);
+            }
 
             CsvToBean<UploadTemplate> csvToBean = new CsvToBeanBuilder(reader)
                     .withType(UploadTemplate.class)
@@ -146,11 +165,33 @@ public class DownloadController {
                     .build();
 
             List<UploadTemplate> templateList = csvToBean.parse();
+           List<String> errorMap = new ArrayList<>();
             templateList.stream().forEach(a -> {
                 try {
                     CaptureData captureData = mapper.readValue(a.getCaptureData(), CaptureData.class);
                     List<FingerPrintInfo> fingerPrintInfos = constructPrints(a, captureData);
-                    dbManager.SaveToDatabase(fingerPrintInfos, false);
+                    List<String> prints = new ArrayList<>();
+                     fingerPrintInfos.forEach(print -> {
+                         if (fingerPrintUtilImpl.isValid(print.getTemplate())) prints.add(print.getTemplate());
+                    });
+
+                     if(prints.size()<6){
+                         errorMap.add(a.getPatientID()+","+a.getDatimCode()+","+"Contains Invalid prints");
+                     }
+
+                    //verify
+                    if(errorMap.isEmpty() && Utils.containsDuplicate(fingerPrintInfos, fingerPrintUtilImpl)){
+                        errorMap.add(a.getPatientID()+","+a.getDatimCode()+","+"Biometric contains duplicate fingers kindly rescan");
+                    }
+                    if(errorMap.isEmpty() && verify) {
+                        String response = Utils.inDb(prints, dbManager, fingerPrintUtilImpl);
+                        if (response != null) {
+                            errorMap.add(a.getPatientID()+","+a.getDatimCode()+","+response);
+                        }
+                    }
+                    if (errorMap.isEmpty()) {
+                        dbManager.SaveToDatabase(fingerPrintInfos, true);
+                    }
                 } catch (IOException ex) {
                     redirectAttributes.addFlashAttribute("message", "IOException occurred while processing file");
                     java.util.logging.Logger.getLogger(DownloadController.class.getName()).log(Level.SEVERE, null, ex);
@@ -162,8 +203,21 @@ public class DownloadController {
                 }
             });
 
+            if(errorMap.size()>0) {
+                ByteArrayOutputStream byteArrayOutputStream = dbManager.getCsvFilePath(errorMap);
+                ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(byteArrayOutputStream.toByteArray());
+                InputStreamResource filInputStreamResource = new InputStreamResource(byteArrayInputStream);
+
+                return ResponseEntity.ok()
+                        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=error_" + file.getOriginalFilename())
+                        .contentType(MediaType.parseMediaType("text/csv"))
+                        .body(filInputStreamResource);
+
+            }
+
             if (redirectAttributes.getFlashAttributes().get("message") != null) {
-                return "redirect:uploadStatus";
+                return  ResponseEntity.ok()
+                        .body(redirectAttributes.getFlashAttributes().get("message"));
             }
 
             redirectAttributes.addFlashAttribute("message",
@@ -173,7 +227,8 @@ public class DownloadController {
             logger.debug(ex.getMessage());
         }
 
-        return "redirect:/uploadStatus";
+        return  ResponseEntity.ok()
+                .body(redirectAttributes.getFlashAttributes().get("message"));
 
     }
 

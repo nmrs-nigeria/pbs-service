@@ -293,6 +293,25 @@ public class DbManager {
         return null;
     }
 
+    public ByteArrayOutputStream getCsvFilePath(List<String> lines){
+        try {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            try (final CSVPrinter printer = new CSVPrinter(new PrintWriter(out),
+                    CSVFormat.DEFAULT.withHeader("PatientID","DatimCode", "Error Message"))) {
+                for(String patient: lines) {
+                    String[] unit = patient.split(",");
+                        printer.printRecord(unit[0], unit[1], unit[2]);
+                }
+                printer.flush();
+                return out;
+            }
+        }
+        catch (Exception ex) {
+            logger.log(Logger.Level.FATAL, ex);
+        }
+        return null;
+    }
+
     public void closeConnection() throws SQLException {
         if (Objects.nonNull(conn)) {
             conn.close();

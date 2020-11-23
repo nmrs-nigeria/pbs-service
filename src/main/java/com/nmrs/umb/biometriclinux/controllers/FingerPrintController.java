@@ -11,6 +11,7 @@ import com.nmrs.umb.biometriclinux.models.FingerPrintInfo;
 import com.nmrs.umb.biometriclinux.models.FingerPrintMatchInputModel;
 import com.nmrs.umb.biometriclinux.models.ResponseModel;
 import com.nmrs.umb.biometriclinux.models.SaveModel;
+import com.nmrs.umb.biometriclinux.security.Utils;
 import org.jboss.logging.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,10 +41,10 @@ public class FingerPrintController {
     @Autowired
     DbManager dbManager;
 
-    @Value("${bulk.verify:false}")
+    @Value("${bulk.verify:true}")
     boolean bulkVerify;
 
-    @Value("${verify:true}")
+    @Value("${verify:false}")
     boolean verify;
 
     @RequestMapping(value = "api/FingerPrint/CapturePrint")
@@ -188,17 +189,19 @@ public class FingerPrintController {
                     }
                 });
                 //verify
-                if(containsDuplicate(fingerPrint)){
+                if(Utils.containsDuplicate(fingerPrint,fingerPrintUtilImpl)){
                     responseModel.setErrorMessage("Biometric contains duplicate fingers kindly rescan");
                     responseModel.setIsSuccessful(false);
                     return new ResponseEntity<>(responseModel, HttpStatus.BAD_REQUEST);
                 }
-                if(bulkVerify && verify) {
-                    String response = inDb(prints);
-                    if (response != null) {
-                        responseModel.setErrorMessage(response);
-                        responseModel.setIsSuccessful(false);
-                        return new ResponseEntity<>(responseModel, HttpStatus.BAD_REQUEST);
+                if(bulkVerify) {
+                    if(verify) {
+                        String response = Utils.inDb(prints, dbManager, fingerPrintUtilImpl);
+                        if (response != null) {
+                            responseModel.setErrorMessage(response);
+                            responseModel.setIsSuccessful(false);
+                            return new ResponseEntity<>(responseModel, HttpStatus.BAD_REQUEST);
+                        }
                     }
                 }
                 responseModel = dbManager.SaveToDatabase(fingerPrint, false);
@@ -242,17 +245,19 @@ public class FingerPrintController {
                 });
 
                 //verify
-                if(containsDuplicate(fingerPrint)){
+                if(Utils.containsDuplicate(fingerPrint,fingerPrintUtilImpl)){
                     responseModel.setErrorMessage("Biometric contains duplicate fingers kindly rescan");
                     responseModel.setIsSuccessful(false);
                     return new ResponseEntity<>(responseModel, HttpStatus.BAD_REQUEST);
                 }
-                if(bulkVerify && verify) {
-                    String response = inDb(prints);
-                    if (response != null) {
-                        responseModel.setErrorMessage(response);
-                        responseModel.setIsSuccessful(false);
-                        return new ResponseEntity<>(responseModel, HttpStatus.BAD_REQUEST);
+                if(bulkVerify) {
+                    if(verify) {
+                        String response = Utils.inDb(prints, dbManager, fingerPrintUtilImpl);
+                        if (response != null) {
+                            responseModel.setErrorMessage(response);
+                            responseModel.setIsSuccessful(false);
+                            return new ResponseEntity<>(responseModel, HttpStatus.BAD_REQUEST);
+                        }
                     }
                 }
 
@@ -277,36 +282,6 @@ public class FingerPrintController {
 
     }
 
-    private String inDb(List<String> fingerPrint) {
-
-        try {
-            dbManager.getConnection();
-            System.out.println("getting all fingerprint in the database");
-            List<FingerPrintInfo> allPrevious = dbManager.GetPatientBiometricinfo(0);
-            int matchedPatientId = fingerPrintUtilImpl.verify(new FingerPrintMatchInputModel(allPrevious, fingerPrint));
-            if (matchedPatientId != 0) {
-                String patientName = dbManager.RetrievePatientNameByPersonId(matchedPatientId);
-                return MessageFormat.format("Finger print record already exist for this patient {0} Name : {1} {2} Person Identifier : {3} ",
-                        "\n", patientName, "\n", matchedPatientId);
-            }
-        }catch (Exception ex){
-            logger.log(Logger.Level.FATAL, ex);
-        }
-        return null;
-    }
-    private boolean containsDuplicate(List<FingerPrintInfo> fingerPrint) {
-        int index = 0;
-        while (index < fingerPrint.size()) {
-            List<FingerPrintInfo> compare = new ArrayList<>(fingerPrint);
-            compare.remove(index);
-            int matchedId = fingerPrintUtilImpl.verify(new FingerPrintMatchInputModel(fingerPrint.get(index).getTemplate(),compare));
-            if (matchedId != 0) {
-               return  true;
-            }
-            index++;
-        }
-        return false;
-    }
 
     @DeleteMapping(value = "api/FingerPrint/deleteFingerPrint")
     public ResponseEntity<?> deleteFingerPrint(@RequestParam String patientId) {

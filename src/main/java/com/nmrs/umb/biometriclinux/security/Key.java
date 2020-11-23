@@ -1,6 +1,7 @@
 package com.nmrs.umb.biometriclinux.security;
 
 import javax.crypto.SecretKey;
+import java.io.File;
 import java.io.FileInputStream;
 import java.security.KeyStore;
 
@@ -9,6 +10,9 @@ public class Key {
     public static SecretKey getSecretKey(String keystore, String passcode) throws Exception {
         //Loading the the KeyStore object
         char[] password = passcode.toCharArray();
+
+        File file = new File(keystore);
+        if(!file.exists())  return null;
 
         //Creating the KeyStore object
         FileInputStream fis = new FileInputStream(keystore);

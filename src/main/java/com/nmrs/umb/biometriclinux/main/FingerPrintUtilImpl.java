@@ -142,7 +142,6 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
 
         return null;
     }
-
 //    //to verify ISO Templates
 //    @Override
 //    public int verify(FingerPrintMatchInputModel input) {
@@ -237,13 +236,18 @@ public class FingerPrintUtilImpl implements FingerPrintUtil {
     }
 
     public boolean isValid(String template) {
-        if(jsgFPLib == null)  initializeDevice();
-        byte[] fingerTemplate = Base64.getDecoder().decode(template);
-        int[] templateSize = new int[1];
-        int[] maxSize = new int[1];
-        jsgFPLib.GetTemplateSize(fingerTemplate,templateSize);
-        jsgFPLib.GetMaxTemplateSize(maxSize);
-        return templateSize[0] > 0 && templateSize[0] <= maxSize[0];
+        try {
+            if (jsgFPLib == null) initializeDevice();
+            byte[] fingerTemplate = Base64.getDecoder().decode(template);
+            int[] templateSize = new int[1];
+            int[] maxSize = new int[1];
+            jsgFPLib.GetTemplateSize(fingerTemplate, templateSize);
+            jsgFPLib.GetMaxTemplateSize(maxSize);
+            return templateSize[0] > 0 && templateSize[0] <= maxSize[0];
+        }catch (Exception ex){
+            logger.error(ex.getMessage());
+        }
+        return false;
     }
 
     private int getMatchedRecord(List<FingerPrintInfo> fingerPrintInfos, boolean[] matched, byte[] unknownTemplateArray) {
