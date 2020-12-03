@@ -3,6 +3,7 @@ package com.nmrs.umb.biometriclinux.controllers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nmrs.umb.biometriclinux.dal.DbManager;
 import com.nmrs.umb.biometriclinux.main.FingerPrintUtilImpl;
+import com.nmrs.umb.biometriclinux.main.Partition;
 import com.nmrs.umb.biometriclinux.models.*;
 import com.nmrs.umb.biometriclinux.security.FileEncrypterDecrypter;
 import com.nmrs.umb.biometriclinux.security.Key;
@@ -27,10 +28,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import javax.crypto.CipherInputStream;
 import javax.crypto.SecretKey;
 import javax.servlet.ServletContext;
-import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -39,6 +37,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 @Controller
 public class DownloadController {
@@ -64,7 +64,14 @@ public class DownloadController {
     @Value("${keystore:pbsKeyStore}")
     String keystore;
 
-	@GetMapping("/view")
+    @Value("${numberOfPatientPerBatch:500}")
+    Integer numberOfPatientsPerBatch;
+
+    @Value("${numberOfDevice:0}")
+    Integer numberOfDevice;
+
+
+    @GetMapping("/view")
 	public String greeting() {
 		return "download";
 	}
@@ -74,6 +81,8 @@ public class DownloadController {
         String filename = null;
         ByteArrayOutputStream byteArrayOutputStream = null;
         try {
+            File keyst = new File(keystore);
+            if(!keyst.exists())  return  ResponseEntity.ok().body("keystore file is missing");
             String passcode = dbManager.getGlobalProperty("pbs_pass");
             if(passcode == null || passcode.isEmpty()) passcode = "changeit";
             secretKey = Key.getSecretKey(keystore, passcode);
@@ -83,21 +92,67 @@ public class DownloadController {
 			if (path != null && path.equalsIgnoreCase("invalid")) {
 				filename = "Patients_with_invalid_fingerprint_data.csv";
 				Set<Integer> invalids = dbManager.getPatientsWithInvalidData();
-				 if (invalids.size() > 0) byteArrayOutputStream = dbManager.getCsvFilePath(invalids, datimCode);
+				 if (invalids.size() > 0) byteArrayOutputStream = dbManager.getCsvFilePath(new ArrayList<>(invalids), datimCode);
 			} else if (path != null && path.equalsIgnoreCase("lowQuality")) {
 				filename = "Patients_with_low_quality_fingerprint_data.csv";
 				Set<Integer> lowQuality = dbManager.getPatientsWithLowQualityData();
-				if (lowQuality.size() > 0)  byteArrayOutputStream = dbManager.getCsvFilePath(lowQuality, datimCode);
+				if (lowQuality.size() > 0)  byteArrayOutputStream = dbManager.getCsvFilePath(new ArrayList<>(lowQuality), datimCode);
 			} else if (path != null && path.equalsIgnoreCase("both")) {
 				String facilityName = dbManager.getGlobalProperty("Facility_Name");
 				facilityName = facilityName.replaceAll(" ","_");
 				filename = datimCode+"-"+facilityName+"-patients-fingerprint-data.csv";
+                String zipName = datimCode+"-"+facilityName+"-patients-fingerprint-data.zip";
 				Set<Integer> invalids = dbManager.getPatientsWithInvalidData();
 				Set<Integer> lowQuality = dbManager.getPatientsWithLowQualityData();
 				Set<Integer> none = dbManager.getPatientsWithoutFingerPrintData();
 				invalids.addAll(lowQuality);
 				invalids.addAll(none);
-				if (invalids.size() > 0)  byteArrayOutputStream = dbManager.getCsvFilePath(invalids, datimCode);
+                int number = numberOfPatientsPerBatch;
+				if(numberOfDevice > 0 ){
+				    int size = invalids.size();
+				    if((size % numberOfDevice) == 0 ){
+				        number =  size/numberOfDevice;
+                    }else {
+                        number =  (size/numberOfDevice) + 1;
+                    }
+                }
+                List<List<Integer>> partitions = Partition.ofSize(new ArrayList<>(invalids), number);
+                ByteArrayOutputStream fos = new ByteArrayOutputStream();
+                ZipOutputStream zipOut = new ZipOutputStream(fos);
+                int i=1;
+                for(List<Integer> partition : partitions) {
+                    byteArrayOutputStream = dbManager.getCsvFilePath(partition, datimCode);
+                    if (byteArrayOutputStream != null) {
+                        ZipEntry zipEntry = new ZipEntry(i+"-"+filename);
+                        i++;
+                        zipOut.putNextEntry(zipEntry);
+                        if (fileEncrypterDecrypter != null) {
+                            CipherInputStream cipherInputStream = fileEncrypterDecrypter.encrypt(byteArrayOutputStream);
+                            byte[] bytes = new byte[1024];
+                            int length;
+                            while((length = cipherInputStream.read(bytes)) >= 0) {
+                                zipOut.write(bytes, 0, length);
+                            }
+                            cipherInputStream.close();
+                        } else {
+                            ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(byteArrayOutputStream.toByteArray());
+                            byte[] bytes = new byte[1024];
+                            int length;
+                            while((length = byteArrayInputStream.read(bytes)) >= 0) {
+                                zipOut.write(bytes, 0, length);
+                            }
+                            byteArrayInputStream.close();
+                        }
+                    }
+                }
+                zipOut.close();
+                fos.close();
+                ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(fos.toByteArray());
+                InputStreamResource file = new InputStreamResource(byteArrayInputStream);
+                return ResponseEntity.ok()
+                        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + zipName)
+                        .contentType(MediaType.parseMediaType("application/zip"))
+                        .body(file);
 			}
 			if(byteArrayOutputStream != null) {
                 InputStreamResource file;

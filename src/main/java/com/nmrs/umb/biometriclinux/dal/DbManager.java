@@ -153,8 +153,23 @@ public class DbManager {
     }
 
     public Set<Integer> getPatientsWithoutFingerPrintData() throws Exception {
-    String sql = "select distinct p.patient_id from patient p where p.patient_id not in (SELECT distinct b.patient_id from " + TABLENAME +" b)" +
-            "and p.voided = false";
+//    String sql = "select distinct p.patient_id from patient p where p.patient_id not in (SELECT distinct b.patient_id from " + TABLENAME +" b)" +
+//            "and p.voided = false";
+
+    String sql = "SELECT DISTINCT alll.main_id as patient_id FROM (" +
+            "SELECT " +
+            "a.person_id AS main_id, " +
+            "b.person_id," +
+            "(TIMESTAMPDIFF(DAY, a.obs_datetime, CURDATE()) -  b.value_numeric) AS diff " +
+            "FROM (SELECT person_id, MAX(obs_datetime) AS obs_datetime FROM obs WHERE concept_id IN (159368) AND voided = FALSE GROUP BY person_id) a" +
+            " INNER JOIN " +
+            "(SELECT person_id, obs_datetime, value_numeric" +
+            "           FROM obs" +
+            "           WHERE concept_id IN (159368) AND voided = FALSE) b " +
+            "ON a.person_id = b.person_id AND a.obs_datetime = b.obs_datetime " +
+            "HAVING diff < 28) alll " +
+            "WHERE " +
+            "alll.main_id NOT IN (SELECT DISTINCT b.patient_id FROM biometricinfo b)";
 
         ppStatement = getConnection().prepareStatement(sql);
 
@@ -235,6 +250,7 @@ public class DbManager {
             patient.setAge(resultSet.getString("Age"));
             patient.setPepFarID(resultSet.getString("PepfarID"));
             patient.setHospID(resultSet.getString("HospID"));
+            patient.setPhoneNumber(resultSet.getString("PhoneNumber"));
             patients.add(patient);
         }
         return patients;
@@ -271,16 +287,16 @@ public class DbManager {
         return fingerPrintInfo;
     }
 
-    public ByteArrayOutputStream getCsvFilePath(Set<Integer> patientIds, String datimCode){
+    public ByteArrayOutputStream getCsvFilePath(List<Integer> patientIds, String datimCode){
        try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             try (final CSVPrinter printer = new CSVPrinter(new PrintWriter(out),
-                    CSVFormat.DEFAULT.withHeader("PatientID", "Name", "Gender", "BirthDate", "Age", "PepfarID", "HospID", "DatimCode"))) {
+                    CSVFormat.DEFAULT.withHeader("PatientID", "Name", "Gender", "BirthDate", "Age", "PepfarID", "HospID", "DatimCode", "PhoneNumber"))) {
                     List<Patient> patients = getPatientDetails(patientIds);
                     for(Patient patient: patients) {
                         if (patient != null) {
                             printer.printRecord(patient.getPatientId(), patient.getName(), patient.getGender(),
-                                    patient.getBirthDate(), patient.getAge(), patient.getPepFarID(), patient.getHospID(), datimCode);
+                                    patient.getBirthDate(), patient.getAge(), patient.getPepFarID(), patient.getHospID(), datimCode, patient.getPhoneNumber());
                         }
                     }
                 printer.flush();
@@ -372,28 +388,31 @@ public class DbManager {
         ppStatement.executeUpdate();
     }
 
-    public List<Patient> getPatientDetails(Set<Integer> patientIds) throws Exception {
-        String sql = "SELECT " +
+    public List<Patient> getPatientDetails(List<Integer> patientIds) throws Exception {
+        String  sql = "SELECT " +
                 "    AA.PatientId," +
                 "    AA.Name," +
                 "    AA.Gender," +
                 "    AA.BirthDate," +
                 "    AA.Age," +
                 "    BB.PepfarID," +
-                "    BB.HospID " +
+                "    BB.HospID," +
+                "    AA.PhoneNumber " +
                 "FROM" +
                 "    (SELECT " +
                 "        p.person_id AS PatientId," +
                 "            CONCAT(pn.family_name, ' ', pn.given_name) AS Name," +
                 "            IF(p.gender = 'M', 'MALE', 'FEMALE') AS Gender," +
                 "            IF(p.birthdate_estimated IS NOT TRUE, p.birthdate, 'Estimated') AS BirthDate," +
-                "            TIMESTAMPDIFF(YEAR, p.birthdate, CURDATE()) AS Age" +
+                "            TIMESTAMPDIFF(YEAR, p.birthdate, CURDATE()) AS Age," +
+                "            pa.value AS PhoneNumber " +
                 "    FROM" +
-                "        person p, person_name pn" +
+                "        person p, person_name pn, person_attribute pa" +
                 "    WHERE" +
                 "        p.person_id = pn.person_id" +
-                "            AND p.person_id in (" + String.join("", Collections.nCopies(patientIds.size()-1, "?,")) + "? )"+
-                ") AA" +
+                "            AND p.person_id = pa.person_id" +
+                "            AND pa.person_attribute_type_id = 8" +
+                "            AND p.person_id IN (" + String.join("", Collections.nCopies(patientIds.size()-1, "?,")) + "? )"+") AA" +
                 "        LEFT JOIN" +
                 "    (SELECT " +
                 "        a.patient_id, a.pepfar AS PepfarID, b.hos AS HospID" +

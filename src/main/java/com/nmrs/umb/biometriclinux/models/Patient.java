@@ -21,6 +21,7 @@ public class Patient {
     public String pepFarID;
     public String hospID;
     public String datimCode;
+    public String phoneNumber;
 
     public String getDatimCode() {
         return datimCode;
@@ -84,5 +85,13 @@ public class Patient {
 
     public void setHospID(String hospID) {
         this.hospID = hospID;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
     }
 }
