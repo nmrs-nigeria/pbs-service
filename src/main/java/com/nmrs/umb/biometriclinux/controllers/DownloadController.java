@@ -121,6 +121,7 @@ public class DownloadController {
                 ZipOutputStream zipOut = new ZipOutputStream(fos);
                 int i=1;
                 for(List<Integer> partition : partitions) {
+                    System.out.println("Partition of "+i+" with "+partition.size()+" size");
                     byteArrayOutputStream = dbManager.getCsvFilePath(partition, datimCode);
                     if (byteArrayOutputStream != null) {
                         ZipEntry zipEntry = new ZipEntry(i+"-"+filename);
@@ -227,7 +228,11 @@ public class DownloadController {
                     List<FingerPrintInfo> fingerPrintInfos = constructPrints(a, captureData);
                     List<String> prints = new ArrayList<>();
                      fingerPrintInfos.forEach(print -> {
-                         if (fingerPrintUtilImpl.isValid(print.getTemplate())) prints.add(print.getTemplate());
+                         if(verify) {
+                            if (fingerPrintUtilImpl.isValid(print.getTemplate())) prints.add(print.getTemplate());
+                         }else{
+                             prints.add(print.getTemplate());
+                         }
                     });
 
                      if(prints.size()<6){
@@ -235,9 +240,11 @@ public class DownloadController {
                      }
 
                     //verify
-                    if(errorMap.isEmpty() && Utils.containsDuplicate(fingerPrintInfos, fingerPrintUtilImpl)){
-                        errorMap.add(a.getPatientID()+","+a.getDatimCode()+","+"Biometric contains duplicate fingers kindly rescan");
-                    }
+//                    if(verify) {
+                        if (errorMap.isEmpty() && Utils.containsDuplicate(fingerPrintInfos, fingerPrintUtilImpl)) {
+                            errorMap.add(a.getPatientID() + "," + a.getDatimCode() + "," + "Biometric contains duplicate fingers kindly rescan");
+                        }
+//                    }
                     if(errorMap.isEmpty() && verify) {
                         String response = Utils.inDb(prints, dbManager, fingerPrintUtilImpl);
                         if (response != null) {
@@ -247,12 +254,8 @@ public class DownloadController {
                     if (errorMap.isEmpty()) {
                         dbManager.SaveToDatabase(fingerPrintInfos, true);
                     }
-                } catch (IOException ex) {
-                    redirectAttributes.addFlashAttribute("message", "IOException occurred while processing file");
-                    java.util.logging.Logger.getLogger(DownloadController.class.getName()).log(Level.SEVERE, null, ex);
-
                 } catch (Exception ex) {
-                    redirectAttributes.addFlashAttribute("message", "error occurred while processing file");
+                    redirectAttributes.addFlashAttribute("message", "IOException occurred while processing file");
                     java.util.logging.Logger.getLogger(DownloadController.class.getName()).log(Level.SEVERE, null, ex);
 
                 }

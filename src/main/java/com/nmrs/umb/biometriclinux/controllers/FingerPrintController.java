@@ -5,6 +5,7 @@
  */
 package com.nmrs.umb.biometriclinux.controllers;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nmrs.umb.biometriclinux.dal.DbManager;
 import com.nmrs.umb.biometriclinux.main.FingerPrintUtilImpl;
 import com.nmrs.umb.biometriclinux.models.FingerPrintInfo;
@@ -19,6 +20,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.sql.SQLException;
 import java.text.MessageFormat;
 import java.util.ArrayList;
@@ -49,12 +53,14 @@ public class FingerPrintController {
 
     @RequestMapping(value = "api/FingerPrint/CapturePrint")
     public ResponseEntity<FingerPrintInfo> CapturePrint(@RequestParam int fingerPosition) {
+        FingerPrintInfo responseObject;
 
-        FingerPrintInfo responseObject = fingerPrintUtilImpl.capture(fingerPosition, null, false);
-
-        System.out.println("captured");
 
         try {
+             responseObject = fingerPrintUtilImpl.capture(fingerPosition, null, false);
+
+            System.out.println("captured");
+
             if (Objects.isNull(responseObject.getErrorMessage())) {
                 if(verify) {
                     if (!bulkVerify) {
@@ -90,7 +96,6 @@ public class FingerPrintController {
                   logger.log(Logger.Level.FATAL, ex);
             }
         }
-
         return new ResponseEntity<>(responseObject, HttpStatus.OK);
 
     }

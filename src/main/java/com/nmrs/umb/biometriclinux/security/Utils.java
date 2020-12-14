@@ -16,15 +16,19 @@ public class Utils {
     static Logger logger = Logger.getLogger(Utils.class);
 
     public static boolean containsDuplicate(List<FingerPrintInfo> fingerPrint, FingerPrintUtilImpl fingerPrintUtil) {
-        int index = 0;
-        while (index < fingerPrint.size()) {
-            List<FingerPrintInfo> compare = new ArrayList<>(fingerPrint);
-            compare.remove(index);
-            int matchedId = fingerPrintUtil.verify(new FingerPrintMatchInputModel(fingerPrint.get(index).getTemplate(),compare));
-            if (matchedId != 0) {
-                return  true;
+        try {
+            int index = 0;
+            while (index < fingerPrint.size()) {
+                List<FingerPrintInfo> compare = new ArrayList<>(fingerPrint);
+                compare.remove(index);
+                int matchedId = fingerPrintUtil.verify(new FingerPrintMatchInputModel(fingerPrint.get(index).getTemplate(), compare));
+                if (matchedId != 0) {
+                    return true;
+                }
+                index++;
             }
-            index++;
+        }catch (Exception ignored){
+
         }
         return false;
     }

@@ -293,10 +293,15 @@ public class DbManager {
             try (final CSVPrinter printer = new CSVPrinter(new PrintWriter(out),
                     CSVFormat.DEFAULT.withHeader("PatientID", "Name", "Gender", "BirthDate", "Age", "PepfarID", "HospID", "DatimCode", "PhoneNumber"))) {
                     List<Patient> patients = getPatientDetails(patientIds);
+                System.out.println("In Patient size "+ patientIds.size());
+                    System.out.println("Out Patient size "+ patients.size());
                     for(Patient patient: patients) {
                         if (patient != null) {
+                            System.out.println(patient.getPepFarID());
                             printer.printRecord(patient.getPatientId(), patient.getName(), patient.getGender(),
                                     patient.getBirthDate(), patient.getAge(), patient.getPepFarID(), patient.getHospID(), datimCode, patient.getPhoneNumber());
+                        }else{
+                            System.out.println("Patient is null ");
                         }
                     }
                 printer.flush();
@@ -304,6 +309,7 @@ public class DbManager {
             }
         }
         catch (Exception ex) {
+           System.out.println(ex.getMessage());
             logger.log(Logger.Level.FATAL, ex);
         }
         return null;
@@ -389,7 +395,7 @@ public class DbManager {
     }
 
     public List<Patient> getPatientDetails(List<Integer> patientIds) throws Exception {
-        String  sql = "SELECT " +
+        String sql = "SELECT " +
                 "    AA.PatientId," +
                 "    AA.Name," +
                 "    AA.Gender," +
@@ -400,19 +406,26 @@ public class DbManager {
                 "    AA.PhoneNumber " +
                 "FROM" +
                 "    (SELECT " +
+                "        AAA.PatientId," +
+                "            AAA.Name," +
+                "            AAA.Gender," +
+                "            AAA.BirthDate," +
+                "            AAA.Age," +
+                "            person_attribute.value AS PhoneNumber" +
+                "    FROM" +
+                "        (SELECT " +
                 "        p.person_id AS PatientId," +
                 "            CONCAT(pn.family_name, ' ', pn.given_name) AS Name," +
                 "            IF(p.gender = 'M', 'MALE', 'FEMALE') AS Gender," +
                 "            IF(p.birthdate_estimated IS NOT TRUE, p.birthdate, 'Estimated') AS BirthDate," +
-                "            TIMESTAMPDIFF(YEAR, p.birthdate, CURDATE()) AS Age," +
-                "            pa.value AS PhoneNumber " +
+                "            TIMESTAMPDIFF(YEAR, p.birthdate, CURDATE()) AS Age" +
                 "    FROM" +
-                "        person p, person_name pn, person_attribute pa" +
+                "        person p, person_name pn" +
                 "    WHERE" +
-                "        p.person_id = pn.person_id" +
-                "            AND p.person_id = pa.person_id" +
-                "            AND pa.person_attribute_type_id = 8" +
-                "            AND p.person_id IN (" + String.join("", Collections.nCopies(patientIds.size()-1, "?,")) + "? )"+") AA" +
+                "        p.person_id = pn.person_id AND pn.voided = false  AND p.voided = false " +
+                "            AND p.person_id IN (" + String.join("", Collections.nCopies(patientIds.size()-1, "?,")) + "? )"+") AAA" +
+                "    LEFT JOIN person_attribute ON AAA.PatientId = person_attribute.person_id" +
+                "        AND person_attribute.person_attribute_type_id = 8 AND person_attribute.voided = false ) AA" +
                 "        LEFT JOIN" +
                 "    (SELECT " +
                 "        a.patient_id, a.pepfar AS PepfarID, b.hos AS HospID" +
@@ -431,12 +444,18 @@ public class DbManager {
                 "        identifier_type = 5) b ON a.patient_id = b.patient_id)" +
                 "    GROUP BY a.patient_id) BB ON AA.PatientId = BB.patient_id";
 
+        System.out.println(sql);
+
         ppStatement = getConnection().prepareStatement(sql);
         int i = 1;
+        StringBuilder g = new StringBuilder();
         for(Integer patientId :patientIds ) {
             ppStatement.setInt(i, patientId);
+            g.append(",").append(patientId);
+
             i++;
         }
+        System.out.println(g);
 
         resultSet = ppStatement.executeQuery();
         List<Patient> patients = convertToPatientList(resultSet);
