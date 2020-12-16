@@ -221,38 +221,52 @@ public class DownloadController {
                     .build();
 
             List<UploadTemplate> templateList = csvToBean.parse();
+            reader.close();
            List<String> errorMap = new ArrayList<>();
             templateList.stream().forEach(a -> {
+                boolean noError = true;
                 try {
-                    CaptureData captureData = mapper.readValue(a.getCaptureData(), CaptureData.class);
-                    List<FingerPrintInfo> fingerPrintInfos = constructPrints(a, captureData);
-                    List<String> prints = new ArrayList<>();
-                     fingerPrintInfos.forEach(print -> {
-                         if(verify) {
-                            if (fingerPrintUtilImpl.isValid(print.getTemplate())) prints.add(print.getTemplate());
-                         }else{
-                             prints.add(print.getTemplate());
-                         }
-                    });
 
-                     if(prints.size()<6){
-                         errorMap.add(a.getPatientID()+","+a.getDatimCode()+","+"Contains Invalid prints");
-                     }
+                    String fileDatimCode = a.getDatimCode();
+                    String datimCode = dbManager.getGlobalProperty("facility_datim_code");
+                    if(!fileDatimCode.equalsIgnoreCase(datimCode)){
+                        errorMap.add(a.getPatientID() + "," + a.getDatimCode() + "," + "DatimCode does not match - this patient does not belong to this facility");
+                    }else {
 
-                    //verify
+                        CaptureData captureData = mapper.readValue(a.getCaptureData(), CaptureData.class);
+                        List<FingerPrintInfo> fingerPrintInfos = constructPrints(a, captureData);
+                        List<String> prints = new ArrayList<>();
+                        fingerPrintInfos.forEach(print -> {
+                            if (verify) {
+                                if (fingerPrintUtilImpl.isValid(print.getTemplate())) prints.add(print.getTemplate());
+                            } else {
+                                prints.add(print.getTemplate());
+                            }
+                        });
+
+                        if (prints.size() < 6) {
+                            noError = false;
+                            errorMap.add(a.getPatientID() + "," + a.getDatimCode() + "," + "Contains Invalid prints");
+                        }
+
+                        //verify
 //                    if(verify) {
-                        if (errorMap.isEmpty() && Utils.containsDuplicate(fingerPrintInfos, fingerPrintUtilImpl)) {
+                        if (noError && Utils.containsDuplicate(fingerPrintInfos, fingerPrintUtilImpl)) {
+                            noError = false;
                             errorMap.add(a.getPatientID() + "," + a.getDatimCode() + "," + "Biometric contains duplicate fingers kindly rescan");
                         }
 //                    }
-                    if(errorMap.isEmpty() && verify) {
-                        String response = Utils.inDb(prints, dbManager, fingerPrintUtilImpl);
-                        if (response != null) {
-                            errorMap.add(a.getPatientID()+","+a.getDatimCode()+","+response);
+                        if (noError && verify) {
+                            String response = Utils.inDb(prints, dbManager, fingerPrintUtilImpl);
+                            if (response != null) {
+                                noError = false;
+                                errorMap.add(a.getPatientID() + "," + a.getDatimCode() + "," + response);
+                            }
                         }
-                    }
-                    if (errorMap.isEmpty()) {
-                        dbManager.SaveToDatabase(fingerPrintInfos, true);
+                        if (noError) {
+                            dbManager.SaveToDatabase(fingerPrintInfos, true);
+
+                        }
                     }
                 } catch (Exception ex) {
                     redirectAttributes.addFlashAttribute("message", "IOException occurred while processing file");
@@ -282,6 +296,7 @@ public class DownloadController {
                     "You successfully uploaded '" + file.getOriginalFilename() + "'");
 
         } catch (Exception ex) {
+            redirectAttributes.addFlashAttribute("message",ex.getMessage());
             logger.debug(ex.getMessage());
         }
 

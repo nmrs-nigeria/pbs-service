@@ -487,9 +487,11 @@ public class DbManager {
             
             responseModel.setIsSuccessful(true);
             responseModel.setErrorMessage("Saved successfully");
+            this.closeConnection();
         } catch (SQLException ex) {
             responseModel.setIsSuccessful(false);
             responseModel.setErrorMessage(ex.getMessage());
+            this.closeConnection();
         }
         
         return responseModel;
