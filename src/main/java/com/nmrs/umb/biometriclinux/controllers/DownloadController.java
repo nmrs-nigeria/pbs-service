@@ -1,5 +1,6 @@
 package com.nmrs.umb.biometriclinux.controllers;
 
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nmrs.umb.biometriclinux.dal.DbManager;
 import com.nmrs.umb.biometriclinux.main.FingerPrintUtilImpl;
@@ -8,9 +9,11 @@ import com.nmrs.umb.biometriclinux.models.*;
 import com.nmrs.umb.biometriclinux.security.FileEncrypterDecrypter;
 import com.nmrs.umb.biometriclinux.security.Key;
 import com.nmrs.umb.biometriclinux.security.Utils;
+import com.opencsv.CSVReader;
 import com.opencsv.bean.ColumnPositionMappingStrategy;
 import com.opencsv.bean.CsvToBean;
 import com.opencsv.bean.CsvToBeanBuilder;
+import org.apache.commons.text.StringEscapeUtils;
 import org.jboss.logging.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,11 +35,9 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.logging.Level;
+import java.util.regex.Matcher;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -46,6 +47,7 @@ public class DownloadController {
     private static final String PBS_UPLOAD_FOLDER = "pbs_upload/";
     Logger logger = Logger.getLogger(DownloadController.class);
     ObjectMapper mapper = new ObjectMapper();
+
     SecretKey secretKey;
     FileEncrypterDecrypter fileEncrypterDecrypter;
 
@@ -188,6 +190,11 @@ public class DownloadController {
     @PostMapping("/upload")
     public ResponseEntity<Object>  uploadFile(@RequestParam("file") MultipartFile file,
             RedirectAttributes redirectAttributes) {
+        mapper.configure(
+                JsonParser.Feature.ALLOW_UNQUOTED_CONTROL_CHARS,
+                true
+        );
+        BufferedReader reader = null;
         try {
             String passcode = dbManager.getGlobalProperty("pbs_pass");
             if(passcode == null || passcode.isEmpty()) passcode = "changeit";
@@ -206,74 +213,97 @@ public class DownloadController {
             Files.deleteIfExists(path);
             Files.createFile(path);
             Files.write(path, bytes);
-            BufferedReader reader = null;
             if(fileEncrypterDecrypter != null) {
                 reader = fileEncrypterDecrypter.decrypt(fileName);
             }else{
                 reader = Files.newBufferedReader(path);
             }
-
-            CsvToBean<UploadTemplate> csvToBean = new CsvToBeanBuilder(reader)
-                    .withType(UploadTemplate.class)
-                    .withIgnoreLeadingWhiteSpace(true)
-                    .withMappingStrategy(setColumMapping())
-                    .withSkipLines(1)//skip headers
-                    .build();
-
-            List<UploadTemplate> templateList = csvToBean.parse();
-            reader.close();
            List<String> errorMap = new ArrayList<>();
-            templateList.stream().forEach(a -> {
-                boolean noError = true;
+           Map<String, List<FingerPrintInfo>> fingerPrintInfoMap = new HashMap<>();
+            CSVReader  csvReader = new CSVReader(reader);
+           int lineNum = 0;
+            while (true) {
+                String[] input;
                 try {
-
-                    String fileDatimCode = a.getDatimCode();
-                    String datimCode = dbManager.getGlobalProperty("facility_datim_code");
-                    if(!fileDatimCode.equalsIgnoreCase(datimCode)){
-                        errorMap.add(a.getPatientID() + "," + a.getDatimCode() + "," + "DatimCode does not match - this patient does not belong to this facility");
-                    }else {
-
-                        CaptureData captureData = mapper.readValue(a.getCaptureData(), CaptureData.class);
-                        List<FingerPrintInfo> fingerPrintInfos = constructPrints(a, captureData);
-                        List<String> prints = new ArrayList<>();
-                        fingerPrintInfos.forEach(print -> {
-                            if (verify) {
-                                if (fingerPrintUtilImpl.isValid(print.getTemplate())) prints.add(print.getTemplate());
-                            } else {
-                                prints.add(print.getTemplate());
-                            }
-                        });
-
-                        if (prints.size() < 6) {
-                            noError = false;
-                            errorMap.add(a.getPatientID() + "," + a.getDatimCode() + "," + "Contains Invalid prints");
-                        }
-
-                        //verify
-//                    if(verify) {
-                        if (noError && Utils.containsDuplicate(fingerPrintInfos, fingerPrintUtilImpl)) {
-                            noError = false;
-                            errorMap.add(a.getPatientID() + "," + a.getDatimCode() + "," + "Biometric contains duplicate fingers kindly rescan");
-                        }
-//                    }
-                        if (noError && verify) {
-                            String response = Utils.inDb(prints, dbManager, fingerPrintUtilImpl);
-                            if (response != null) {
-                                noError = false;
-                                errorMap.add(a.getPatientID() + "," + a.getDatimCode() + "," + response);
-                            }
-                        }
-                        if (noError) {
-                            dbManager.SaveToDatabase(fingerPrintInfos, true);
-
-                        }
-                    }
+                    input = csvReader.readNext();
                 } catch (Exception ex) {
-                    redirectAttributes.addFlashAttribute("message", "IOException occurred while processing file");
-                    java.util.logging.Logger.getLogger(DownloadController.class.getName()).log(Level.SEVERE, null, ex);
-
+                    input = new String[0];
                 }
-            });
+                if (input == null) break;
+
+                if (input.length > 2 && lineNum != 0) {
+                    String inputDatimCode = input[1];
+                    String patientId = input[0];
+                    String json = input[2];
+
+                    boolean noError = true;
+                    try {
+                        String datimCode = dbManager.getGlobalProperty("facility_datim_code");
+                        if (!inputDatimCode.equalsIgnoreCase(datimCode)) {
+                            errorMap.add(patientId + "," + inputDatimCode + "," + "DatimCode does not match - this patient does not belong to this facility");
+                        } else {
+
+                            CaptureData captureData = mapper.readValue(json, CaptureData.class);
+                            List<FingerPrintInfo> fingerPrintInfos = constructPrints(patientId, captureData);
+                            List<String> prints = new ArrayList<>();
+                            fingerPrintInfos.forEach(print -> {
+                                if (verify) {
+                                    if (fingerPrintUtilImpl.isValid(print.getTemplate()))
+                                        prints.add(print.getTemplate());
+                                } else {
+                                    prints.add(print.getTemplate());
+                                }
+                            });
+
+                            if (prints.size() < 6) {
+                                noError = false;
+                                errorMap.add(patientId + "," + inputDatimCode + "," + "Contains Invalid prints");
+                            }
+
+                            //verify
+//                    if(verify) {
+                            if (noError && Utils.containsDuplicate(fingerPrintInfos, fingerPrintUtilImpl)) {
+                                noError = false;
+                                errorMap.add(patientId + "," + inputDatimCode + "," + "Biometric contains duplicate fingers kindly rescan");
+                            }
+//                    }
+                            if (noError && verify) {
+                                String response = Utils.inDb(prints, dbManager, fingerPrintUtilImpl);
+                                if (response != null) {
+                                    noError = false;
+                                    errorMap.add(patientId + "," + inputDatimCode + "," + response);
+                                }
+                            }
+                            if (noError) {
+                                fingerPrintInfoMap.put(patientId, fingerPrintInfos);
+                            }
+                        }
+                    } catch (Exception ex) {
+                        errorMap.add(patientId + "," + inputDatimCode + "," + ex.getMessage());
+                        redirectAttributes.addFlashAttribute("message", "IOException occurred while processing file");
+                        java.util.logging.Logger.getLogger(DownloadController.class.getName()).log(Level.SEVERE, null, ex);
+
+                    }
+                }else{
+                    if(input.length>0) {
+                        errorMap.add(input[0] + ",," + "Invalid Data");
+                    }else{
+                        errorMap.add(",,Invalid Data");
+                    }
+                }
+                lineNum++;
+            }
+            try{
+                if(fingerPrintInfoMap.size() > 0){
+                    dbManager.SaveMapToDatabase(fingerPrintInfoMap, true);
+                }
+            } catch (Exception ex) {
+                redirectAttributes.addFlashAttribute("message", "IOException occurred while processing file");
+                java.util.logging.Logger.getLogger(DownloadController.class.getName()).log(Level.SEVERE, null, ex);
+
+            }finally {
+                reader.close();
+            }
 
             if(errorMap.size()>0) {
                 ByteArrayOutputStream byteArrayOutputStream = dbManager.getCsvFilePath(errorMap);
@@ -298,6 +328,11 @@ public class DownloadController {
         } catch (Exception ex) {
             redirectAttributes.addFlashAttribute("message",ex.getMessage());
             logger.debug(ex.getMessage());
+
+        }finally {
+            try {
+                if(reader != null) reader.close();
+            }catch (Exception ignored){}
         }
 
         return  ResponseEntity.ok()
@@ -310,50 +345,50 @@ public class DownloadController {
         return "uploadStatus";
     }
 
-    private List<FingerPrintInfo> constructPrints(UploadTemplate uploadTemplate, CaptureData captureData) {
+    private List<FingerPrintInfo> constructPrints(String patientId, CaptureData captureData) {
         List<FingerPrintInfo> fingerPrintInfos = new ArrayList<>();
         FingerPrintInfo fingerPrintInfo;
 
         if (captureData.getLeft_index() != null) {
 
-            fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getLeft_index(), AppModel.FingerPositions.LeftIndex);
+            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getLeft_index(), AppModel.FingerPositions.LeftIndex);
             fingerPrintInfos.add(fingerPrintInfo);
         } 
         if (captureData.getLeft_middle() != null) {
-            fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getLeft_middle(), AppModel.FingerPositions.LeftMiddle);
+            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getLeft_middle(), AppModel.FingerPositions.LeftMiddle);
             fingerPrintInfos.add(fingerPrintInfo);
         } 
         
         if (captureData.getLeft_small() != null) {
-            fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getLeft_small(), AppModel.FingerPositions.LeftSmall);
+            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getLeft_small(), AppModel.FingerPositions.LeftSmall);
             fingerPrintInfos.add(fingerPrintInfo);
         } 
         if (captureData.getLeft_thumb() != null) {
-            fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getLeft_thumb(), AppModel.FingerPositions.LeftThumb);
+            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getLeft_thumb(), AppModel.FingerPositions.LeftThumb);
             fingerPrintInfos.add(fingerPrintInfo);
         } 
         if (captureData.getLeft_wedding() != null) {
-            fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getLeft_wedding(), AppModel.FingerPositions.LeftWedding);
+            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getLeft_wedding(), AppModel.FingerPositions.LeftWedding);
             fingerPrintInfos.add(fingerPrintInfo);
         } 
         if (captureData.getRight_index() != null) {
-            fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getRight_index(), AppModel.FingerPositions.RightIndex);
+            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getRight_index(), AppModel.FingerPositions.RightIndex);
             fingerPrintInfos.add(fingerPrintInfo);
         } 
         if (captureData.getRight_middle() != null) {
-            fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getRight_middle(), AppModel.FingerPositions.RightMiddle);
+            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getRight_middle(), AppModel.FingerPositions.RightMiddle);
             fingerPrintInfos.add(fingerPrintInfo);
         } 
         if (captureData.getRight_small() != null) {
-            fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getRight_small(), AppModel.FingerPositions.RightSmall);
+            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getRight_small(), AppModel.FingerPositions.RightSmall);
             fingerPrintInfos.add(fingerPrintInfo);
         } 
         if (captureData.getRight_thumb() != null) {
-            fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getRight_thumb(), AppModel.FingerPositions.RightThumb);
+            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getRight_thumb(), AppModel.FingerPositions.RightThumb);
             fingerPrintInfos.add(fingerPrintInfo);
         } 
         if (captureData.getRight_wedding() != null) {
-            fingerPrintInfo = constructPrintPerPosition(uploadTemplate, captureData.getRight_wedding(), AppModel.FingerPositions.RightWedding);
+            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getRight_wedding(), AppModel.FingerPositions.RightWedding);
             fingerPrintInfos.add(fingerPrintInfo);
         }
 
@@ -361,7 +396,7 @@ public class DownloadController {
 
     }
 
-    private FingerPrintInfo constructPrintPerPosition(UploadTemplate uploadTemplate,
+    private FingerPrintInfo constructPrintPerPosition(String patientId,
             FingerPosition fingerPosition, AppModel.FingerPositions fingerPositions) {
         FingerPrintInfo fingerPrintInfo = new FingerPrintInfo();
 
@@ -371,7 +406,7 @@ public class DownloadController {
         fingerPrintInfo.setImageHeight(fingerPosition.getImageHeight());
         fingerPrintInfo.setImageQuality(fingerPosition.getQuality());
         fingerPrintInfo.setImageWidth(fingerPosition.getImageWidth());
-        fingerPrintInfo.setPatienId(Integer.parseInt(uploadTemplate.getPatientID()));
+        fingerPrintInfo.setPatienId(Integer.parseInt(patientId));
         fingerPrintInfo.setTemplate(fingerPosition.getTemplate());
         fingerPrintInfo.setCreator(0);
 

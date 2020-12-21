@@ -7,6 +7,7 @@ import javax.crypto.CipherInputStream;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.IvParameterSpec;
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 
 public class FileEncrypterDecrypter {
 
