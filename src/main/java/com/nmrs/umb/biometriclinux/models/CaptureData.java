@@ -22,6 +22,21 @@ public class CaptureData {
     private FingerPosition right_index;
     private FingerPosition right_middle;
 
+
+    public CaptureData(){}
+    public CaptureData(FingerPosition left_index, FingerPosition left_middle, FingerPosition left_small, FingerPosition left_thumb, FingerPosition left_wedding, FingerPosition right_wedding, FingerPosition right_thumb, FingerPosition right_small, FingerPosition right_index, FingerPosition right_middle) {
+        this.left_index = left_index;
+        this.left_middle = left_middle;
+        this.left_small = left_small;
+        this.left_thumb = left_thumb;
+        this.left_wedding = left_wedding;
+        this.right_wedding = right_wedding;
+        this.right_thumb = right_thumb;
+        this.right_small = right_small;
+        this.right_index = right_index;
+        this.right_middle = right_middle;
+    }
+
     public FingerPosition getLeft_index() {
         return left_index;
     }

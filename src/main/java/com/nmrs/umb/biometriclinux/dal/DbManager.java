@@ -100,7 +100,7 @@ public class DbManager {
             ppStatement = getConnection().prepareStatement(sql);
             resultSet = ppStatement.executeQuery();
         }
-        
+        closeConnection();
         return converToFingerPrintList(resultSet);
     }
 
@@ -119,13 +119,12 @@ public class DbManager {
 
     }
 
-    public FingerPrintInfo GetPatientBiometricInfo(int patientId, String fingerPosition) throws Exception {
-
+    public FingerPrintInfo GetPatientBiometricInfo(int patientId, String fingerPosition, Connection connection) throws Exception {
         String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template," +
                 " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, " +
                 "manufacturer, date_created, creator FROM " + TABLENAME +" where patient_id = ? AND fingerPosition = ? ";
 
-        ppStatement = getConnection().prepareStatement(sql);
+        ppStatement = connection.prepareStatement(sql);
         ppStatement.setString(1, String.valueOf(patientId));
         ppStatement.setString(2, fingerPosition);
 
@@ -344,7 +343,7 @@ public class DbManager {
         
     }
     
-    public void Save(FingerPrintInfo fingerPrint, boolean update) throws Exception {
+    public void Save(FingerPrintInfo fingerPrint, boolean update, Connection connection) throws Exception {
         String sql = "insert into " + TABLENAME + "(patient_Id, imageWidth, imageHeight, imageDPI,  " +
                 "imageQuality, fingerPosition, serialNumber, model, manufacturer, creator, date_created, new_template, template)" +
                 "Values(?,?,?,?,?,?,?,?,?,?,NOW(),?,?)";
@@ -365,7 +364,7 @@ public class DbManager {
                     "template = ? WHERE patient_id = ? AND fingerPosition = ? ";
         }
 
-        ppStatement = getConnection().prepareStatement(sql);
+        ppStatement = connection.prepareStatement(sql);
         ppStatement.setInt(1, fingerPrint.getPatienId());
         ppStatement.setInt(2, fingerPrint.getImageWidth());
         ppStatement.setInt(3, fingerPrint.getImageHeight());
@@ -392,6 +391,7 @@ public class DbManager {
         ppStatement = getConnection().prepareStatement(sql);
         ppStatement.setInt(1, patientId);
         ppStatement.executeUpdate();
+        this.closeConnection();
     }
 
     public List<Patient> getPatientDetails(List<Integer> patientIds) throws Exception {
@@ -466,6 +466,7 @@ public class DbManager {
     public ResponseModel SaveToDatabase(List<FingerPrintInfo> fingerPrintList, boolean update) throws Exception {
         
         ResponseModel responseModel = new ResponseModel();
+        Connection connection = this.openConnection();
         
         if (fingerPrintList.isEmpty()) {
             responseModel.setIsSuccessful(false);
@@ -476,9 +477,9 @@ public class DbManager {
             
             for (FingerPrintInfo a : fingerPrintList) {
                 if(update){
-                    Save(a, this.GetPatientBiometricInfo(a.getPatienId(), a.getFingerPositions().name()) != null);
+                    Save(a, this.GetPatientBiometricInfo(a.getPatienId(), a.getFingerPositions().name(), connection) != null, connection);
                 }else {
-                    Save(a, false);
+                    Save(a, false, connection);
                 }
 
             }
@@ -491,9 +492,47 @@ public class DbManager {
         } catch (SQLException ex) {
             responseModel.setIsSuccessful(false);
             responseModel.setErrorMessage(ex.getMessage());
+        }finally {
             this.closeConnection();
         }
         
+        return responseModel;
+    }
+
+    public ResponseModel SaveMapToDatabase(Map<String, List<FingerPrintInfo>> fingerPrintMap, boolean update) throws Exception {
+
+        ResponseModel responseModel = new ResponseModel();
+        Connection connection = this.openConnection();
+
+        if (fingerPrintMap.isEmpty()) {
+            responseModel.setIsSuccessful(false);
+            responseModel.setErrorMessage("The request contains an empty list");
+        }
+
+        try {
+            for(String key : fingerPrintMap.keySet()) {
+                for (FingerPrintInfo a : fingerPrintMap.get(key)) {
+                    if (update) {
+                        Save(a, this.GetPatientBiometricInfo(a.getPatienId(), a.getFingerPositions().name(), connection) != null, connection);
+                    } else {
+                        Save(a, false, connection);
+                    }
+
+                }
+                updatePatientTable(Integer.parseInt(key));
+            }
+
+
+            responseModel.setIsSuccessful(true);
+            responseModel.setErrorMessage("Saved successfully");
+            this.closeConnection();
+        } catch (SQLException ex) {
+            responseModel.setIsSuccessful(false);
+            responseModel.setErrorMessage(ex.getMessage());
+        }finally {
+            this.closeConnection();
+        }
+
         return responseModel;
     }
 
@@ -550,7 +589,7 @@ public class DbManager {
             
             foundName = resultSet.getString("patient_name");
         }
-        
+
         return foundName;
         
     }
@@ -597,8 +636,11 @@ public class DbManager {
         ppStatement.setString(1, property);
         resultSet = ppStatement.executeQuery();
         while (resultSet.next()) {
-            return resultSet.getString("property_value");
+            String value =resultSet.getString("property_value");
+            this.closeConnection();
+            return value;
         }
+        this.closeConnection();
         return  null;
     }
 }
