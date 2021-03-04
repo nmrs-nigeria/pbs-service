@@ -35,6 +35,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.regex.Matcher;
@@ -47,6 +48,7 @@ public class DownloadController {
     private static final String PBS_UPLOAD_FOLDER = "pbs_upload/";
     Logger logger = Logger.getLogger(DownloadController.class);
     ObjectMapper mapper = new ObjectMapper();
+    SimpleDateFormat simpleDateFormat = new SimpleDateFormat("dd/MM/yyyy");
 
     SecretKey secretKey;
     FileEncrypterDecrypter fileEncrypterDecrypter;
@@ -232,19 +234,35 @@ public class DownloadController {
                 if (input == null) break;
 
                 if (input.length > 2 && lineNum != 0) {
-                    String inputDatimCode = input[1];
-                    String patientId = input[0];
-                    String json = input[2];
+                    String patientId;
+                    String pepFarId;
+                    String inputDatimCode;
+                    String json;
+                    String date_Captured;
+                    if(input.length == 5){
+                        patientId = input[0];
+                        pepFarId = input[1];
+                        inputDatimCode = input[2];
+                        json = input[3];
+                        date_Captured = input[4];
+                    }else{
+                        patientId = input[0];
+                        pepFarId = null;
+                        inputDatimCode = input[1];
+                        json = input[2];
+                        date_Captured = null;
+                    }
 
+                    Date dte = getConvertedDate(date_Captured);
                     boolean noError = true;
                     try {
                         String datimCode = dbManager.getGlobalProperty("facility_datim_code");
                         if (!inputDatimCode.equalsIgnoreCase(datimCode)) {
-                            errorMap.add(patientId + "," + inputDatimCode + "," + "DatimCode does not match - this patient does not belong to this facility");
+                            errorMap.add(patientId + "," + pepFarId + "," + inputDatimCode + "," + "DatimCode does not match - this patient does not belong to this facility");
                         } else {
 
                             CaptureData captureData = mapper.readValue(json, CaptureData.class);
-                            List<FingerPrintInfo> fingerPrintInfos = constructPrints(patientId, captureData);
+                            List<FingerPrintInfo> fingerPrintInfos = constructPrints(patientId, captureData, dte);
                             List<String> prints = new ArrayList<>();
                             fingerPrintInfos.forEach(print -> {
                                 if (verify) {
@@ -257,21 +275,21 @@ public class DownloadController {
 
                             if (prints.size() < 6) {
                                 noError = false;
-                                errorMap.add(patientId + "," + inputDatimCode + "," + "Contains Invalid prints");
+                                errorMap.add(patientId + "," + pepFarId + "," + inputDatimCode + "," + "Contains Invalid prints");
                             }
 
                             //verify
 //                    if(verify) {
                             if (noError && Utils.containsDuplicate(fingerPrintInfos, fingerPrintUtilImpl)) {
                                 noError = false;
-                                errorMap.add(patientId + "," + inputDatimCode + "," + "Biometric contains duplicate fingers kindly rescan");
+                                errorMap.add(patientId + "," + pepFarId + "," + inputDatimCode + "," + "Biometric contains duplicate fingers kindly rescan");
                             }
 //                    }
                             if (noError && verify) {
                                 String response = Utils.inDb(prints, dbManager, fingerPrintUtilImpl);
                                 if (response != null) {
                                     noError = false;
-                                    errorMap.add(patientId + "," + inputDatimCode + "," + response);
+                                    errorMap.add(patientId + "," + pepFarId + "," + inputDatimCode + "," + response);
                                 }
                             }
                             if (noError) {
@@ -285,10 +303,12 @@ public class DownloadController {
 
                     }
                 }else{
-                    if(input.length>0) {
-                        errorMap.add(input[0] + ",," + "Invalid Data");
-                    }else{
-                        errorMap.add(",,Invalid Data");
+                    if(lineNum != 0) {
+                        if (input.length > 0) {
+                            errorMap.add(input[0] + ",,," + "Invalid Data");
+                        } else {
+                            errorMap.add(",,,Invalid Data");
+                        }
                     }
                 }
                 lineNum++;
@@ -340,55 +360,68 @@ public class DownloadController {
 
     }
 
+    private Date getConvertedDate(String date_captured) {
+        Date date = null;
+        if(date_captured != null){
+            try {
+                date = simpleDateFormat.parse(date_captured);
+            }catch (Exception ex){
+                logger.error(ex.getMessage());
+            }
+        }
+        if(date == null) date = new Date();
+        return date;
+    }
+
     @GetMapping("/uploadStatus")
     public String uploadStatus() {
         return "uploadStatus";
     }
 
-    private List<FingerPrintInfo> constructPrints(String patientId, CaptureData captureData) {
+    private List<FingerPrintInfo> constructPrints(String patientId, CaptureData captureData, Date dateCaptured) {
         List<FingerPrintInfo> fingerPrintInfos = new ArrayList<>();
         FingerPrintInfo fingerPrintInfo;
 
         if (captureData.getLeft_index() != null) {
 
-            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getLeft_index(), AppModel.FingerPositions.LeftIndex);
+            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getLeft_index(), AppModel.FingerPositions.LeftIndex, dateCaptured);
             fingerPrintInfos.add(fingerPrintInfo);
         } 
         if (captureData.getLeft_middle() != null) {
-            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getLeft_middle(), AppModel.FingerPositions.LeftMiddle);
+            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getLeft_middle(), AppModel.FingerPositions.LeftMiddle, dateCaptured);
             fingerPrintInfos.add(fingerPrintInfo);
         } 
         
         if (captureData.getLeft_small() != null) {
-            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getLeft_small(), AppModel.FingerPositions.LeftSmall);
+            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getLeft_small(), AppModel.FingerPositions.LeftSmall, dateCaptured);
             fingerPrintInfos.add(fingerPrintInfo);
         } 
         if (captureData.getLeft_thumb() != null) {
-            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getLeft_thumb(), AppModel.FingerPositions.LeftThumb);
+            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getLeft_thumb(), AppModel.FingerPositions.LeftThumb, dateCaptured);
             fingerPrintInfos.add(fingerPrintInfo);
         } 
         if (captureData.getLeft_wedding() != null) {
-            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getLeft_wedding(), AppModel.FingerPositions.LeftWedding);
+            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getLeft_wedding(), AppModel.FingerPositions.LeftWedding, dateCaptured);
             fingerPrintInfos.add(fingerPrintInfo);
         } 
         if (captureData.getRight_index() != null) {
-            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getRight_index(), AppModel.FingerPositions.RightIndex);
+            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getRight_index(), AppModel.FingerPositions.RightIndex, dateCaptured);
             fingerPrintInfos.add(fingerPrintInfo);
         } 
         if (captureData.getRight_middle() != null) {
-            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getRight_middle(), AppModel.FingerPositions.RightMiddle);
+            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getRight_middle(), AppModel.FingerPositions.RightMiddle, dateCaptured);
             fingerPrintInfos.add(fingerPrintInfo);
         } 
         if (captureData.getRight_small() != null) {
-            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getRight_small(), AppModel.FingerPositions.RightSmall);
+            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getRight_small(), AppModel.FingerPositions.RightSmall, dateCaptured);
             fingerPrintInfos.add(fingerPrintInfo);
         } 
         if (captureData.getRight_thumb() != null) {
-            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getRight_thumb(), AppModel.FingerPositions.RightThumb);
+            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getRight_thumb(), AppModel.FingerPositions.RightThumb, dateCaptured);
             fingerPrintInfos.add(fingerPrintInfo);
         } 
         if (captureData.getRight_wedding() != null) {
-            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getRight_wedding(), AppModel.FingerPositions.RightWedding);
+            fingerPrintInfo = constructPrintPerPosition(patientId, captureData.getRight_wedding(), AppModel.FingerPositions.RightWedding, dateCaptured);
             fingerPrintInfos.add(fingerPrintInfo);
         }
 
@@ -397,10 +430,10 @@ public class DownloadController {
     }
 
     private FingerPrintInfo constructPrintPerPosition(String patientId,
-            FingerPosition fingerPosition, AppModel.FingerPositions fingerPositions) {
+            FingerPosition fingerPosition, AppModel.FingerPositions fingerPositions, Date dateCaptured) {
         FingerPrintInfo fingerPrintInfo = new FingerPrintInfo();
 
-        fingerPrintInfo.setDateCreated(new Date());
+        fingerPrintInfo.setDateCreated(dateCaptured);
         fingerPrintInfo.setFingerPositions(fingerPositions);
         fingerPrintInfo.setImageDPI(fingerPosition.getImageDpi());
         fingerPrintInfo.setImageHeight(fingerPosition.getImageHeight());

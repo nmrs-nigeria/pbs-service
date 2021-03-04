@@ -15,7 +15,11 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.sql.*;
 import java.text.MessageFormat;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.*;
+import java.util.Date;
 
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
@@ -100,8 +104,9 @@ public class DbManager {
             ppStatement = getConnection().prepareStatement(sql);
             resultSet = ppStatement.executeQuery();
         }
+        List<FingerPrintInfo>  printInfos = converToFingerPrintList(resultSet);
         closeConnection();
-        return converToFingerPrintList(resultSet);
+        return printInfos;
     }
 
     public List<FingerPrintInfo> GetPatientBiometricInfoExcept(String patientUUID) throws Exception {
@@ -318,10 +323,10 @@ public class DbManager {
         try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             try (final CSVPrinter printer = new CSVPrinter(new PrintWriter(out),
-                    CSVFormat.DEFAULT.withHeader("PatientID","DatimCode", "Error Message"))) {
+                    CSVFormat.DEFAULT.withHeader("PatientID", "PepFarId", "DatimCode", "Error Message"))) {
                 for(String patient: lines) {
                     String[] unit = patient.split(",");
-                        printer.printRecord(unit[0], unit[1], unit[2]);
+                        printer.printRecord(unit[0], unit[1], unit[2], unit[3]);
                 }
                 printer.flush();
                 return out;
@@ -346,7 +351,7 @@ public class DbManager {
     public void Save(FingerPrintInfo fingerPrint, boolean update, Connection connection) throws Exception {
         String sql = "insert into " + TABLENAME + "(patient_Id, imageWidth, imageHeight, imageDPI,  " +
                 "imageQuality, fingerPosition, serialNumber, model, manufacturer, creator, date_created, new_template, template)" +
-                "Values(?,?,?,?,?,?,?,?,?,?,NOW(),?,?)";
+                "Values(?,?,?,?,?,?,?,?,?,?,?,?,?)";
         if(update) {
             sql = "UPDATE " + TABLENAME + " SET " +
                     "patient_Id = ?, " +
@@ -359,7 +364,7 @@ public class DbManager {
                     "model = ?, " +
                     "manufacturer = ?, " +
                     "creator = ?, " +
-                    "date_created = NOW(), " +
+                    "date_created = ?, " +
                     "new_template = ?, " +
                     "template = ? WHERE patient_id = ? AND fingerPosition = ? ";
         }
@@ -375,15 +380,24 @@ public class DbManager {
         ppStatement.setString(8, fingerPrint.getModel());
         ppStatement.setString(9, fingerPrint.getManufacturer());
         ppStatement.setInt(10, fingerPrint.getCreator());
-        ppStatement.setBlob(11, new ByteArrayInputStream(fingerPrint.getTemplate().getBytes()), fingerPrint.getTemplate().getBytes().length);
-        ppStatement.setNull(12, Types.NULL);
+        ppStatement.setDate(11, getDate(fingerPrint.getDateCreated()));
+        ppStatement.setBlob(12, new ByteArrayInputStream(fingerPrint.getTemplate().getBytes()), fingerPrint.getTemplate().getBytes().length);
+        ppStatement.setNull(13, Types.NULL);
         if(update) {
-            ppStatement.setInt(13, fingerPrint.getPatienId());
-            ppStatement.setString(14, fingerPrint.getFingerPositions().name());
+            ppStatement.setInt(14, fingerPrint.getPatienId());
+            ppStatement.setString(15, fingerPrint.getFingerPositions().name());
         }
         
         ppStatement.executeUpdate();
         
+    }
+
+    private java.sql.Date getDate(Date dateCaptured) {
+        if(dateCaptured == null) dateCaptured = new Date();
+        ZoneId zoneId = ZoneId.of ( "Africa/Lagos" );
+        ZonedDateTime zdt = ZonedDateTime.ofInstant ( dateCaptured.toInstant() , zoneId );
+        LocalDate localDate = zdt.toLocalDate();
+        return java.sql.Date.valueOf( localDate );
     }
 
     public void updatePatientTable(Integer patientId) throws Exception {
