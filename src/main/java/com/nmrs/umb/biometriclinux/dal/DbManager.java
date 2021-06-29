@@ -5,9 +5,12 @@
  */
 package com.nmrs.umb.biometriclinux.dal;
 
+
+import com.nmrs.umb.biometriclinux.entities.Biometricinfo;
 import com.nmrs.umb.biometriclinux.main.AppUtil;
 import com.nmrs.umb.biometriclinux.main.FingerPrintUtilImpl;
 import com.nmrs.umb.biometriclinux.models.*;
+import com.nmrs.umb.biometriclinux.serviceimpl.BiometricInfoImpl;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -20,6 +23,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.Date;
+import java.util.logging.Level;
 
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
@@ -39,7 +43,10 @@ public class DbManager {
     Environment env;
     @Autowired
     FingerPrintUtilImpl fingerPrintUtilImpl;
-    
+
+    @Autowired
+    BiometricInfoImpl biometricInfoImpl;
+
     private Connection conn = null;
     private Statement statement = null;
     private PreparedStatement ppStatement = null;
@@ -47,7 +54,7 @@ public class DbManager {
     private final String TABLENAME = "biometricinfo";
 
     Logger logger = Logger.getLogger(DbManager.class);
-    
+
     public Connection openConnection() throws ClassNotFoundException, SQLException {
         String server = env.getProperty("app.server");
         String dbName = env.getProperty("app.dbname");
@@ -57,7 +64,7 @@ public class DbManager {
 
         // String serverUrl = "jdbc:mysql://localhost:3306/openmrs?useUnicode=true&useJDBCCompliantTimezoneShift=true&useLegacyDatetimeCode=false&serverTimezone=UTC";
         String serverUrl = MessageFormat.format("jdbc:mysql://{0}:{1}/{2}?useUnicode=true&useJDBCCompliantTimezoneShift=true&useLegacyDatetimeCode=false&serverTimezone=UTC&useSSL=false", server, dbPort, dbName);
-        
+
         Class.forName("com.mysql.jdbc.Driver");
         conn = DriverManager
                 .getConnection(serverUrl, dbUsername, dbPassword);
@@ -67,7 +74,42 @@ public class DbManager {
     public Connection getConnection() throws Exception {
         return this.openConnection();
     }
-    
+//
+//    public void migrateTemplate() throws Exception {
+//        List<Biometricinfo> pullOldTemplate = pullOldTemplate();
+//        pullOldTemplate.stream()
+//                .forEach(a -> {
+//            try {
+//                updateOldTemplateInfo(a);
+//            } catch (Exception ex) {
+//                logger.fatal(Level.SEVERE, ex);
+//            }
+//        });
+//    }
+//
+//    private List<Biometricinfo> pullOldTemplate() throws Exception {
+//        String sql = "SELECT patient_id, template, CONVERT(new_template USING utf8) as new_template,"
+//                + " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, "
+//                + "manufacturer, date_created, creator FROM " + TABLENAME + " where "
+//                + "template IS NOT NULL AND new_template IS NULL ";
+//
+//        ppStatement = getConnection().prepareStatement(sql);
+//        resultSet = ppStatement.executeQuery();
+//
+//        return converToBiometricInfoList(resultSet);
+//
+//    }
+//
+//    private int updateOldTemplateInfo(Biometricinfo biometricinfo) throws Exception {
+//        String sql = "update " + TABLENAME + " set new_template = ? where biometricInfo_Id = ?";
+//        ppStatement = getConnection().prepareStatement(sql);
+//        ppStatement.setBlob(1, new ByteArrayInputStream(biometricinfo.getTemplate().getBytes()), biometricinfo.getTemplate().getBytes().length);
+//        ppStatement.setInt(2, biometricinfo.getBiometricInfoId());
+//
+//        return ppStatement.executeUpdate();
+//
+//    }
+
     private void createFingerPrintTable() throws Exception {
         //  DbManager dbManager = new DbManager();
         // openConnection();
@@ -87,34 +129,36 @@ public class DbManager {
                 + "PRIMARY KEY(`biometricInfo_Id`),"
                 + "FOREIGN KEY(patient_Id) REFERENCES patient(patient_Id),"
                 + "FOREIGN KEY(creator) REFERENCES patient(creator)) ENGINE = MYISAM AUTO_INCREMENT = 2 DEFAULT CHARSET = utf8; ");
-        
+
     }
-    
+
     public List<FingerPrintInfo> GetPatientBiometricinfo(int patientId) throws Exception {
-        
+
         if (patientId != 0) {
-            String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template," +
-                    " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, " +
-                    "manufacturer, date_created, creator FROM " + TABLENAME + " where patient_id = ? ";
+            String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template,"
+                    + " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, "
+                    + "manufacturer, date_created, creator FROM " + TABLENAME + " where patient_id = ? and voided = 0";
             ppStatement = getConnection().prepareStatement(sql);
             ppStatement.setInt(1, patientId);
             resultSet = ppStatement.executeQuery();
         } else {
-            String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template, imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, manufacturer, date_created, creator FROM " + TABLENAME;
+            String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template, imageWidth,"
+                    + " imageHeight, imageDPI,  imageQuality, fingerPosition, "
+                    + "serialNumber, model, manufacturer, date_created, creator FROM " + TABLENAME+ " where voided = 0";
             ppStatement = getConnection().prepareStatement(sql);
             resultSet = ppStatement.executeQuery();
         }
-        List<FingerPrintInfo>  printInfos = converToFingerPrintList(resultSet);
+        List<FingerPrintInfo> printInfos = converToFingerPrintList(resultSet);
         closeConnection();
         return printInfos;
     }
 
     public List<FingerPrintInfo> GetPatientBiometricInfoExcept(String patientUUID) throws Exception {
 
-        String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template," +
-                " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, " +
-                "manufacturer, date_created, creator FROM " + TABLENAME +" where " +
-                "(patient_id != (select p.person_id from person p where p.uuid = ? )) ";
+        String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template,"
+                + " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, "
+                + "manufacturer, date_created, creator FROM " + TABLENAME + " where "
+                + "(patient_id != (select p.person_id from person p where p.uuid = ? ) AND voided = 0) ";
 
         ppStatement = getConnection().prepareStatement(sql);
         ppStatement.setString(1, patientUUID);
@@ -125,9 +169,9 @@ public class DbManager {
     }
 
     public FingerPrintInfo GetPatientBiometricInfo(int patientId, String fingerPosition, Connection connection) throws Exception {
-        String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template," +
-                " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, " +
-                "manufacturer, date_created, creator FROM " + TABLENAME +" where patient_id = ? AND fingerPosition = ? ";
+        String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template,"
+                + " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, "
+                + "manufacturer, date_created, creator FROM " + TABLENAME + " where patient_id = ? AND fingerPosition = ? AND voided = 0";
 
         ppStatement = connection.prepareStatement(sql);
         ppStatement.setString(1, String.valueOf(patientId));
@@ -135,22 +179,24 @@ public class DbManager {
 
         resultSet = ppStatement.executeQuery();
         List<FingerPrintInfo> fingerInfoList = converToFingerPrintList(resultSet);
-        if (fingerInfoList.size() > 0) return fingerInfoList.get(0);
+        if (fingerInfoList.size() > 0) {
+            return fingerInfoList.get(0);
+        }
         return null;
 
     }
 
     public Set<Integer> getPatientsWithLowQualityData() throws Exception {
 
-        String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template," +
-                " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, " +
-                "manufacturer, date_created, creator FROM " + TABLENAME +" where imageQuality < ? ORDER BY patient_id";
+        String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template,"
+                + " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, "
+                + "manufacturer, date_created, creator FROM " + TABLENAME + " where imageQuality < ? AND voided = 0 ORDER BY patient_id";
 
         ppStatement = getConnection().prepareStatement(sql);
         ppStatement.setInt(1, AppUtil.QUALITY_THRESHOLD);
 
         resultSet = ppStatement.executeQuery();
-        Set<Integer> printInfos =  convertToDistinctFingerPrintList(resultSet, false);
+        Set<Integer> printInfos = convertToDistinctFingerPrintList(resultSet, false);
         this.closeConnection();
         return printInfos;
 
@@ -160,25 +206,25 @@ public class DbManager {
 //    String sql = "select distinct p.patient_id from patient p where p.patient_id not in (SELECT distinct b.patient_id from " + TABLENAME +" b)" +
 //            "and p.voided = false";
 
-    String sql = "SELECT DISTINCT alll.main_id as patient_id FROM (" +
-            "SELECT " +
-            "a.person_id AS main_id, " +
-            "b.person_id," +
-            "(TIMESTAMPDIFF(DAY, a.obs_datetime, CURDATE()) -  b.value_numeric) AS diff " +
-            "FROM (SELECT person_id, MAX(obs_datetime) AS obs_datetime FROM obs WHERE concept_id IN (159368) AND voided = FALSE GROUP BY person_id) a" +
-            " INNER JOIN " +
-            "(SELECT person_id, obs_datetime, value_numeric" +
-            "           FROM obs" +
-            "           WHERE concept_id IN (159368) AND voided = FALSE) b " +
-            "ON a.person_id = b.person_id AND a.obs_datetime = b.obs_datetime " +
-            "HAVING diff < 28) alll " +
-            "WHERE " +
-            "alll.main_id NOT IN (SELECT DISTINCT b.patient_id FROM biometricinfo b)";
+        String sql = "SELECT DISTINCT alll.main_id as patient_id FROM ("
+                + "SELECT "
+                + "a.person_id AS main_id, "
+                + "b.person_id,"
+                + "(TIMESTAMPDIFF(DAY, a.obs_datetime, CURDATE()) -  b.value_numeric) AS diff "
+                + "FROM (SELECT person_id, MAX(obs_datetime) AS obs_datetime FROM obs WHERE concept_id IN (159368) AND voided = FALSE GROUP BY person_id) a"
+                + " INNER JOIN "
+                + "(SELECT person_id, obs_datetime, value_numeric"
+                + "           FROM obs"
+                + "           WHERE concept_id IN (159368) AND voided = FALSE) b "
+                + "ON a.person_id = b.person_id AND a.obs_datetime = b.obs_datetime "
+                + "HAVING diff < 28) alll "
+                + "WHERE "
+                + "alll.main_id NOT IN (SELECT DISTINCT b.patient_id FROM biometricinfo b AND b.voided = 0)";
 
         ppStatement = getConnection().prepareStatement(sql);
 
         resultSet = ppStatement.executeQuery();
-        Set<Integer> printInfos =  convertToDistinctList(resultSet);
+        Set<Integer> printInfos = convertToDistinctList(resultSet);
         this.closeConnection();
         return printInfos;
 
@@ -186,14 +232,14 @@ public class DbManager {
 
     public Set<Integer> getPatientsWithInvalidData() throws Exception {
 
-        String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template," +
-                " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, " +
-                "manufacturer, date_created, creator FROM " + TABLENAME + " ORDER BY patient_id";
+        String sql = "SELECT biometricInfo_Id, patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template,"
+                + " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, "
+                + "manufacturer, date_created, creator FROM " + TABLENAME + " where voided = 0 ORDER BY patient_id";
 
         ppStatement = getConnection().prepareStatement(sql);
 
         resultSet = ppStatement.executeQuery();
-        Set<Integer> printInfos =  convertToDistinctFingerPrintList(resultSet, true);
+        Set<Integer> printInfos = convertToDistinctFingerPrintList(resultSet, true);
         this.closeConnection();
         return printInfos;
 
@@ -204,7 +250,7 @@ public class DbManager {
         Set<Integer> patientIds = new HashSet<>();
 
         while (resultSet.next()) {
-            if(resultSet.getString("patient_id") != null) {
+            if (resultSet.getString("patient_id") != null) {
                 patientIds.add(Integer.parseInt(resultSet.getString("patient_id")));
             }
         }
@@ -217,12 +263,12 @@ public class DbManager {
         Set<Integer> patientIds = new HashSet<>();
 
         while (resultSet.next()) {
-            if(returnOnlyInValid){
-                if(resultSet.getString("template") != null && !fingerPrintUtilImpl.isValid(resultSet.getString("template"))) {
+            if (returnOnlyInValid) {
+                if (resultSet.getString("template") != null && !fingerPrintUtilImpl.isValid(resultSet.getString("template"))) {
                     FingerPrintInfo fingerPrintInfo = getFingerPrintInfo(resultSet);
                     patientIds.add(fingerPrintInfo.getPatienId());
                 }
-            }else{
+            } else {
                 FingerPrintInfo fingerPrintInfo = getFingerPrintInfo(resultSet);
                 patientIds.add(fingerPrintInfo.getPatienId());
             }
@@ -232,16 +278,29 @@ public class DbManager {
     }
 
     private List<FingerPrintInfo> converToFingerPrintList(ResultSet resultSet) throws SQLException {
-        
+
         List<FingerPrintInfo> fingerInfoList = new ArrayList<>();
-        
+
         while (resultSet.next()) {
             FingerPrintInfo fingerPrintInfo = getFingerPrintInfo(resultSet);
             fingerInfoList.add(fingerPrintInfo);
         }
         return fingerInfoList;
-        
+
     }
+
+//    private List<Biometricinfo> converToBiometricInfoList(ResultSet resultSet) throws SQLException {
+//
+//        List<Biometricinfo> biometricInfoList = new ArrayList<>();
+//
+//        while (resultSet.next()) {
+//            Biometricinfo templatesInfo = getBiometricInfo(resultSet);
+//            biometricInfoList.add(templatesInfo);
+//        }
+//        return biometricInfoList;
+//
+//    }
+
     private List<Patient> convertToPatientList(ResultSet resultSet) throws SQLException {
 
         List<Patient> patients = new ArrayList<>();
@@ -259,7 +318,6 @@ public class DbManager {
         }
         return patients;
     }
-
 
     private FingerPrintInfo getFingerPrintInfo(ResultSet resultSet) throws SQLException {
         FingerPrintInfo fingerPrintInfo = new FingerPrintInfo();
@@ -291,48 +349,67 @@ public class DbManager {
         return fingerPrintInfo;
     }
 
-    public ByteArrayOutputStream getCsvFilePath(List<Integer> patientIds, String datimCode){
-       try {
+//    private Biometricinfo getBiometricInfo(ResultSet resultSet) throws SQLException {
+//        Biometricinfo biometricInfo = new Biometricinfo();
+//        biometricInfo.setCreator(resultSet.getInt("creator"));//default for NMRS
+//        biometricInfo.setDateCreated(resultSet.getDate("date_created"));
+//        biometricInfo.setPatientId(resultSet.getInt("patient_id"));
+//        biometricInfo.setImageWidth(resultSet.getInt("imageWidth"));
+//        biometricInfo.setImageHeight(resultSet.getInt("imageHeight"));
+//        biometricInfo.setImageDPI(resultSet.getInt("imageDPI"));
+//        biometricInfo.setImageQuality(resultSet.getInt("imageQuality"));
+//
+//        biometricInfo.setFingerPosition(resultSet.getString("fingerPosition"));
+//        biometricInfo.setSerialNumber(resultSet.getString("serialNumber"));
+//        biometricInfo.setModel(resultSet.getString("model"));
+//        biometricInfo.setManufacturer(resultSet.getString("manufacturer"));
+//        biometricInfo.setTemplate(resultSet.getString("template"));
+//        biometricInfo.setNewTemplate(resultSet.getBytes("new_template"));
+//        biometricInfo.setBiometricInfoId(resultSet.getInt("biometricInfo_Id"));
+//
+//        return biometricInfo;
+//    }
+
+    public ByteArrayOutputStream getCsvFilePath(List<Integer> patientIds, String datimCode) {
+        try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             try (final CSVPrinter printer = new CSVPrinter(new PrintWriter(out),
                     CSVFormat.DEFAULT.withHeader("PatientID", "Name", "Gender", "BirthDate", "Age", "PepfarID", "HospID", "DatimCode", "PhoneNumber"))) {
-                    List<Patient> patients = getPatientDetails(patientIds);
-                System.out.println("In Patient size "+ patientIds.size());
-                    System.out.println("Out Patient size "+ patients.size());
-                    for(Patient patient: patients) {
-                        if (patient != null) {
-                            System.out.println(patient.getPepFarID());
-                            printer.printRecord(patient.getPatientId(), patient.getName(), patient.getGender(),
-                                    patient.getBirthDate(), patient.getAge(), patient.getPepFarID(), patient.getHospID(), datimCode, patient.getPhoneNumber());
-                        }else{
-                            System.out.println("Patient is null ");
-                        }
+                List<Patient> patients = getPatientDetails(patientIds);
+                System.out.println("In Patient size " + patientIds.size());
+                System.out.println("Out Patient size " + patients.size());
+                for (Patient patient : patients) {
+                    if (patient != null) {
+                        System.out.println(patient.getPepFarID());
+                        printer.printRecord(patient.getPatientId(), patient.getName(), patient.getGender(),
+                                patient.getBirthDate(), patient.getAge(), patient.getPepFarID(), patient.getHospID(), datimCode, patient.getPhoneNumber());
+                    } else {
+                        System.out.println("Patient is null ");
                     }
+                }
                 printer.flush();
                 return out;
             }
-        }
-        catch (Exception ex) {
-           System.out.println(ex.getMessage());
+        } catch (Exception ex) {
+            System.out.println(ex.getMessage());
             logger.log(Logger.Level.FATAL, ex);
         }
         return null;
     }
 
-    public ByteArrayOutputStream getCsvFilePath(List<String> lines){
+    public ByteArrayOutputStream getCsvFilePath(List<String> lines) {
         try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             try (final CSVPrinter printer = new CSVPrinter(new PrintWriter(out),
                     CSVFormat.DEFAULT.withHeader("PatientID", "PepFarId", "DatimCode", "Error Message"))) {
-                for(String patient: lines) {
+                for (String patient : lines) {
                     String[] unit = patient.split(",");
-                        printer.printRecord(unit[0], unit[1], unit[2], unit[3]);
+                    printer.printRecord(unit[0], unit[1], unit[2], unit[3]);
                 }
                 printer.flush();
                 return out;
             }
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
             logger.log(Logger.Level.FATAL, ex);
         }
         return null;
@@ -345,28 +422,28 @@ public class DbManager {
         if (Objects.nonNull(ppStatement)) {
             ppStatement.close();
         }
-        
+
     }
-    
+
     public void Save(FingerPrintInfo fingerPrint, boolean update, Connection connection) throws Exception {
-        String sql = "insert into " + TABLENAME + "(patient_Id, imageWidth, imageHeight, imageDPI,  " +
-                "imageQuality, fingerPosition, serialNumber, model, manufacturer, creator, date_created, new_template, template)" +
-                "Values(?,?,?,?,?,?,?,?,?,?,?,?,?)";
-        if(update) {
-            sql = "UPDATE " + TABLENAME + " SET " +
-                    "patient_Id = ?, " +
-                    "imageWidth = ?, " +
-                    "imageHeight = ?, " +
-                    "imageDPI = ?, " +
-                    "imageQuality = ?, " +
-                    "fingerPosition = ?, " +
-                    "serialNumber = ?, " +
-                    "model = ?, " +
-                    "manufacturer = ?, " +
-                    "creator = ?, " +
-                    "date_created = ?, " +
-                    "new_template = ?, " +
-                    "template = ? WHERE patient_id = ? AND fingerPosition = ? ";
+        String sql = "insert into " + TABLENAME + "(patient_Id, imageWidth, imageHeight, imageDPI,  "
+                + "imageQuality, fingerPosition, serialNumber, model, manufacturer, creator, date_created, new_template, template)"
+                + "Values(?,?,?,?,?,?,?,?,?,?,?,?,?)";
+        if (update) {
+            sql = "UPDATE " + TABLENAME + " SET "
+                    + "patient_Id = ?, "
+                    + "imageWidth = ?, "
+                    + "imageHeight = ?, "
+                    + "imageDPI = ?, "
+                    + "imageQuality = ?, "
+                    + "fingerPosition = ?, "
+                    + "serialNumber = ?, "
+                    + "model = ?, "
+                    + "manufacturer = ?, "
+                    + "creator = ?, "
+                    + "date_created = ?, "
+                    + "new_template = ?, "
+                    + "template = ? WHERE patient_id = ? AND fingerPosition = ? AND voided = 0 ";
         }
 
         ppStatement = connection.prepareStatement(sql);
@@ -383,21 +460,23 @@ public class DbManager {
         ppStatement.setDate(11, getDate(fingerPrint.getDateCreated()));
         ppStatement.setBlob(12, new ByteArrayInputStream(fingerPrint.getTemplate().getBytes()), fingerPrint.getTemplate().getBytes().length);
         ppStatement.setNull(13, Types.NULL);
-        if(update) {
+        if (update) {
             ppStatement.setInt(14, fingerPrint.getPatienId());
             ppStatement.setString(15, fingerPrint.getFingerPositions().name());
         }
-        
+
         ppStatement.executeUpdate();
-        
+
     }
 
     private java.sql.Date getDate(Date dateCaptured) {
-        if(dateCaptured == null) dateCaptured = new Date();
-        ZoneId zoneId = ZoneId.of ( "Africa/Lagos" );
-        ZonedDateTime zdt = ZonedDateTime.ofInstant ( dateCaptured.toInstant() , zoneId );
+        if (dateCaptured == null) {
+            dateCaptured = new Date();
+        }
+        ZoneId zoneId = ZoneId.of("Africa/Lagos");
+        ZonedDateTime zdt = ZonedDateTime.ofInstant(dateCaptured.toInstant(), zoneId);
         LocalDate localDate = zdt.toLocalDate();
-        return java.sql.Date.valueOf( localDate );
+        return java.sql.Date.valueOf(localDate);
     }
 
     public void updatePatientTable(Integer patientId) throws Exception {
@@ -409,61 +488,61 @@ public class DbManager {
     }
 
     public List<Patient> getPatientDetails(List<Integer> patientIds) throws Exception {
-        String sql = "SELECT " +
-                "    AA.PatientId," +
-                "    AA.Name," +
-                "    AA.Gender," +
-                "    AA.BirthDate," +
-                "    AA.Age," +
-                "    BB.PepfarID," +
-                "    BB.HospID," +
-                "    AA.PhoneNumber " +
-                "FROM" +
-                "    (SELECT " +
-                "        AAA.PatientId," +
-                "            AAA.Name," +
-                "            AAA.Gender," +
-                "            AAA.BirthDate," +
-                "            AAA.Age," +
-                "            person_attribute.value AS PhoneNumber" +
-                "    FROM" +
-                "        (SELECT " +
-                "        p.person_id AS PatientId," +
-                "            CONCAT(pn.family_name, ' ', pn.given_name) AS Name," +
-                "            IF(p.gender = 'M', 'MALE', 'FEMALE') AS Gender," +
-                "            IF(p.birthdate_estimated IS NOT TRUE, p.birthdate, 'Estimated') AS BirthDate," +
-                "            TIMESTAMPDIFF(YEAR, p.birthdate, CURDATE()) AS Age" +
-                "    FROM" +
-                "        person p, person_name pn" +
-                "    WHERE" +
-                "        p.person_id = pn.person_id AND pn.voided = false  AND p.voided = false " +
-                "            AND p.person_id IN (" + String.join("", Collections.nCopies(patientIds.size()-1, "?,")) + "? )"+") AAA" +
-                "    LEFT JOIN person_attribute ON AAA.PatientId = person_attribute.person_id" +
-                "        AND person_attribute.person_attribute_type_id = 8 AND person_attribute.voided = false ) AA" +
-                "        LEFT JOIN" +
-                "    (SELECT " +
-                "        a.patient_id, a.pepfar AS PepfarID, b.hos AS HospID" +
-                "    FROM" +
-                "        ((SELECT " +
-                "        patient_id, identifier AS pepfar" +
-                "    FROM" +
-                "        patient_identifier" +
-                "    WHERE" +
-                "        identifier_type = 4) a" +
-                "    LEFT JOIN (SELECT " +
-                "        patient_id, identifier AS hos" +
-                "    FROM" +
-                "        patient_identifier" +
-                "    WHERE" +
-                "        identifier_type = 5) b ON a.patient_id = b.patient_id)" +
-                "    GROUP BY a.patient_id) BB ON AA.PatientId = BB.patient_id";
+        String sql = "SELECT "
+                + "    AA.PatientId,"
+                + "    AA.Name,"
+                + "    AA.Gender,"
+                + "    AA.BirthDate,"
+                + "    AA.Age,"
+                + "    BB.PepfarID,"
+                + "    BB.HospID,"
+                + "    AA.PhoneNumber "
+                + "FROM"
+                + "    (SELECT "
+                + "        AAA.PatientId,"
+                + "            AAA.Name,"
+                + "            AAA.Gender,"
+                + "            AAA.BirthDate,"
+                + "            AAA.Age,"
+                + "            person_attribute.value AS PhoneNumber"
+                + "    FROM"
+                + "        (SELECT "
+                + "        p.person_id AS PatientId,"
+                + "            CONCAT(pn.family_name, ' ', pn.given_name) AS Name,"
+                + "            IF(p.gender = 'M', 'MALE', 'FEMALE') AS Gender,"
+                + "            IF(p.birthdate_estimated IS NOT TRUE, p.birthdate, 'Estimated') AS BirthDate,"
+                + "            TIMESTAMPDIFF(YEAR, p.birthdate, CURDATE()) AS Age"
+                + "    FROM"
+                + "        person p, person_name pn"
+                + "    WHERE"
+                + "        p.person_id = pn.person_id AND pn.voided = false  AND p.voided = false "
+                + "            AND p.person_id IN (" + String.join("", Collections.nCopies(patientIds.size() - 1, "?,")) + "? )" + ") AAA"
+                + "    LEFT JOIN person_attribute ON AAA.PatientId = person_attribute.person_id"
+                + "        AND person_attribute.person_attribute_type_id = 8 AND person_attribute.voided = false ) AA"
+                + "        LEFT JOIN"
+                + "    (SELECT "
+                + "        a.patient_id, a.pepfar AS PepfarID, b.hos AS HospID"
+                + "    FROM"
+                + "        ((SELECT "
+                + "        patient_id, identifier AS pepfar"
+                + "    FROM"
+                + "        patient_identifier"
+                + "    WHERE"
+                + "        identifier_type = 4) a"
+                + "    LEFT JOIN (SELECT "
+                + "        patient_id, identifier AS hos"
+                + "    FROM"
+                + "        patient_identifier"
+                + "    WHERE"
+                + "        identifier_type = 5) b ON a.patient_id = b.patient_id)"
+                + "    GROUP BY a.patient_id) BB ON AA.PatientId = BB.patient_id";
 
         System.out.println(sql);
 
         ppStatement = getConnection().prepareStatement(sql);
         int i = 1;
         StringBuilder g = new StringBuilder();
-        for(Integer patientId :patientIds ) {
+        for (Integer patientId : patientIds) {
             ppStatement.setInt(i, patientId);
             g.append(",").append(patientId);
 
@@ -476,40 +555,40 @@ public class DbManager {
         this.closeConnection();
         return patients;
     }
-    
+
     public ResponseModel SaveToDatabase(List<FingerPrintInfo> fingerPrintList, boolean update) throws Exception {
-        
+
         ResponseModel responseModel = new ResponseModel();
         Connection connection = this.openConnection();
-        
+
         if (fingerPrintList.isEmpty()) {
             responseModel.setIsSuccessful(false);
             responseModel.setErrorMessage("The request contains an empty list");
         }
-        
+
         try {
-            
+
             for (FingerPrintInfo a : fingerPrintList) {
-                if(update){
+                if (update) {
                     Save(a, this.GetPatientBiometricInfo(a.getPatienId(), a.getFingerPositions().name(), connection) != null, connection);
-                }else {
+                } else {
                     Save(a, false, connection);
                 }
 
             }
 
             updatePatientTable(fingerPrintList.get(0).getPatienId());
-            
+
             responseModel.setIsSuccessful(true);
             responseModel.setErrorMessage("Saved successfully");
             this.closeConnection();
         } catch (SQLException ex) {
             responseModel.setIsSuccessful(false);
             responseModel.setErrorMessage(ex.getMessage());
-        }finally {
+        } finally {
             this.closeConnection();
         }
-        
+
         return responseModel;
     }
 
@@ -524,7 +603,7 @@ public class DbManager {
         }
 
         try {
-            for(String key : fingerPrintMap.keySet()) {
+            for (String key : fingerPrintMap.keySet()) {
                 for (FingerPrintInfo a : fingerPrintMap.get(key)) {
                     if (update) {
                         Save(a, this.GetPatientBiometricInfo(a.getPatienId(), a.getFingerPositions().name(), connection) != null, connection);
@@ -536,14 +615,13 @@ public class DbManager {
                 updatePatientTable(Integer.parseInt(key));
             }
 
-
             responseModel.setIsSuccessful(true);
             responseModel.setErrorMessage("Saved successfully");
             this.closeConnection();
         } catch (SQLException ex) {
             responseModel.setIsSuccessful(false);
             responseModel.setErrorMessage(ex.getMessage());
-        }finally {
+        } finally {
             this.closeConnection();
         }
 
@@ -572,73 +650,75 @@ public class DbManager {
 //   
     //this is a database Id not the unique pepfar nor hospital Id
     public Map<String, String> RetrievePatientNameByPatientId(int patientId) throws Exception {
-        
+
         ppStatement = getConnection().prepareStatement("SELECT CONCAT(given_name,' ',family_name) AS patient_name, pid.identifier FROM person_name pn "
                 + "INNER JOIN patient_identifier pid ON pn.person_id = pid.patient_id "
                 + "WHERE pid.identifier_type = 4 AND pid.patient_id = ?;");
-        
+
         ppStatement.setInt(1, patientId);
         resultSet = ppStatement.executeQuery();
         Map<String, String> nameAndIdentifier = new HashMap<>();
         while (resultSet.next()) {
-            
+
             nameAndIdentifier.put("name", resultSet.getString("patient_name"));
             nameAndIdentifier.put("Identifier", resultSet.getString("identifier"));
             break;
         }
-        
+
         return nameAndIdentifier;
-        
+
     }
-    
+
     public String RetrievePatientNameByPersonId(int personId) throws Exception {
-        
+
         ppStatement = getConnection().prepareStatement("SELECT CONCAT(given_name,' ',family_name) AS patient_name FROM person_name pn "
                 + "WHERE person_id = ?;");
-        
+
         ppStatement.setInt(1, personId);
         resultSet = ppStatement.executeQuery();
         String foundName = "";
         while (resultSet.next()) {
-            
+
             foundName = resultSet.getString("patient_name");
         }
 
         return foundName;
-        
+
     }
-    
+
     public Map<String, String> RetrievePatientIdAndNameByUUID(String UUID) throws Exception {
         //openConnection();
         ppStatement = getConnection().prepareStatement("SELECT CONCAT(given_name,' ',family_name) AS patient_name, p.person_id "
                 + "FROM person_name pn INNER JOIN person p ON pn.person_id = p.person_id "
                 + "WHERE p.UUID = ?;");
-        
+
         ppStatement.setString(1, UUID);
         resultSet = ppStatement.executeQuery();
         Map<String, String> nameAndPersonMap = new HashMap<>();
         while (resultSet.next()) {
-            
+
             nameAndPersonMap.put("name", resultSet.getString("patient_name"));
             nameAndPersonMap.put("person_id", resultSet.getString("person_id"));
             break;
         }
         //closeConnection();
         return nameAndPersonMap;
-        
+
     }
-    
+
     public int deletePatientBiometricInfo(String patientUid) throws Exception {
         // Map<String,String> nameAndPersonMap =  RetrievePatientIdAndNameByUUID(patientUid);
-        ppStatement = getConnection().prepareStatement("DELETE  FROM `biometricinfo` WHERE patient_id in (select p.person_id from person p where p.uuid = ? )");
+      //  ppStatement = getConnection().prepareStatement("DELETE  FROM `biometricinfo` WHERE patient_id in (select p.person_id from person p where p.uuid = ? )");
+         ppStatement = getConnection().prepareStatement("update `biometricinfo` set voided = 1, date_changed = NOW(), date_voided = NOW()"
+                 + " WHERE patient_id in (select p.person_id from person p where p.uuid = ? )");
         ppStatement.setString(1, patientUid);
-        
+
         return ppStatement.executeUpdate();
     }
 
     public int deleteSpecificPatientBiometricInfo(String patientUid, String fingerPosition) throws Exception {
         // Map<String,String> nameAndPersonMap =  RetrievePatientIdAndNameByUUID(patientUid);
-        ppStatement = getConnection().prepareStatement("DELETE  FROM `biometricinfo` WHERE patient_id in (select p.person_id from person p where p.uuid = ? ) and fingerPosition = ?)");
+        ppStatement = getConnection().prepareStatement("DELETE  FROM `biometricinfo` WHERE patient_id in (select p.person_id from person p where p.uuid = ? ) and fingerPosition = ? AND voided = 0 )");
         ppStatement.setString(1, patientUid);
         ppStatement.setString(2, fingerPosition);
 
@@ -650,11 +730,11 @@ public class DbManager {
         ppStatement.setString(1, property);
         resultSet = ppStatement.executeQuery();
         while (resultSet.next()) {
-            String value =resultSet.getString("property_value");
+            String value = resultSet.getString("property_value");
             this.closeConnection();
             return value;
         }
         this.closeConnection();
-        return  null;
+        return null;
     }
 }

@@ -1,27 +1,38 @@
 <?xml version="1.1" encoding="UTF-8" standalone="no"?>
 <databaseChangeLog logicalFilePath="path-independent" xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.5.xsd">
-    <changeSet author="Morrison Idiasirue" id="nmrs-pbs-1">
-                <customChange class="com.nmrs.umb.custom.changeset.PBSTransfer"/>
-    </changeSet>
-    
-    <changeSet author="Morrison Idiasirue" id="nmrs-pbs-1">
-                <customChange class="com.nmrs.umb.custom.changeset.PBSTransfer"/>
-    </changeSet>
-    
-        <changeSet id="nmrs-pbs-2" author="Morrison Idiasirue" >
-        <createTable tableName="temp-module">
-            <column name="id" autoIncrement="true" type="int">
-                <constraints nullable="false" primaryKey="true"/>
-            </column>
-            <column  name="username" type="varchar(255)">
+
+    <changeSet id="nmrs-pbs-1" author="Morrison Idiasirue" >
+        
+        <addColumn tableName="biometricinfo">
+ 
+            <column name="changed_by" type="int"/>
+            <column name="date_changed" type="datetime" />
+            <column name="voided" type="boolean" defaultValueBoolean="false">
                 <constraints nullable="false"/>
             </column>
-            
-            <column  name="password" type="varchar(255)">
-                <constraints nullable="false"/>
-            </column>                      
-        </createTable>     
+            <column name="voided_by" type="int" />
+            <column name="date_voided" type="datetime" />
+            <column name="void_reason" type="varchar(255)" defaultValue="null"/>
+
+
+        </addColumn>
+        
+        
+        <addForeignKeyConstraint constraintName="biometricinfo_changed_by_fk"
+                                 baseTableName="biometricinfo" baseColumnNames="changed_by"
+                                 referencedTableName="users" referencedColumnNames="user_id"/>
+    
+        <addForeignKeyConstraint constraintName="biometricinfo_voided_by_fk"
+                                 baseTableName="biometricinfo" baseColumnNames="voided_by"
+                                 referencedTableName="users" referencedColumnNames="user_id"/>
+        
     </changeSet>
+    
+    
+    <changeSet author="Morrison Idiasirue" id="nmrs-pbs-2">
+        <customChange class="com.nmrs.umb.biometriclinux.custom.changeset.PBSTransfer"/>
+    </changeSet>
+    
     
 </databaseChangeLog>
 
