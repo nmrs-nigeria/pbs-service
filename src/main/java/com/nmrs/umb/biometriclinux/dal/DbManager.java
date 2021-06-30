@@ -135,14 +135,14 @@ public class DbManager {
     public List<FingerPrintInfo> GetPatientBiometricinfo(int patientId) throws Exception {
 
         if (patientId != 0) {
-            String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template,"
+            String sql = "SELECT patient_id, COALESCE(CONVERT(new_template USING utf8), template) as template,"
                     + " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, "
                     + "manufacturer, date_created, creator FROM " + TABLENAME + " where patient_id = ? and voided = 0";
             ppStatement = getConnection().prepareStatement(sql);
             ppStatement.setInt(1, patientId);
             resultSet = ppStatement.executeQuery();
         } else {
-            String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template, imageWidth,"
+            String sql = "SELECT patient_id, COALESCE(CONVERT(new_template USING utf8), template) as template, imageWidth,"
                     + " imageHeight, imageDPI,  imageQuality, fingerPosition, "
                     + "serialNumber, model, manufacturer, date_created, creator FROM " + TABLENAME+ " where voided = 0";
             ppStatement = getConnection().prepareStatement(sql);
@@ -155,7 +155,7 @@ public class DbManager {
 
     public List<FingerPrintInfo> GetPatientBiometricInfoExcept(String patientUUID) throws Exception {
 
-        String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template,"
+        String sql = "SELECT patient_id, COALESCE(CONVERT(new_template USING utf8), template) as template,"
                 + " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, "
                 + "manufacturer, date_created, creator FROM " + TABLENAME + " where "
                 + "(patient_id != (select p.person_id from person p where p.uuid = ? ) AND voided = 0) ";
@@ -169,7 +169,7 @@ public class DbManager {
     }
 
     public FingerPrintInfo GetPatientBiometricInfo(int patientId, String fingerPosition, Connection connection) throws Exception {
-        String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template,"
+        String sql = "SELECT patient_id, COALESCE(CONVERT(new_template USING utf8), template) as template,"
                 + " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, "
                 + "manufacturer, date_created, creator FROM " + TABLENAME + " where patient_id = ? AND fingerPosition = ? AND voided = 0";
 
@@ -188,7 +188,7 @@ public class DbManager {
 
     public Set<Integer> getPatientsWithLowQualityData() throws Exception {
 
-        String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template,"
+        String sql = "SELECT patient_id, COALESCE(CONVERT(new_template USING utf8), template) as template,"
                 + " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, "
                 + "manufacturer, date_created, creator FROM " + TABLENAME + " where imageQuality < ? AND voided = 0 ORDER BY patient_id";
 
@@ -232,7 +232,7 @@ public class DbManager {
 
     public Set<Integer> getPatientsWithInvalidData() throws Exception {
 
-        String sql = "SELECT biometricInfo_Id, patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template,"
+        String sql = "SELECT biometricInfo_Id, patient_id, COALESCE(CONVERT(new_template USING utf8), template) as template,"
                 + " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, "
                 + "manufacturer, date_created, creator FROM " + TABLENAME + " where voided = 0 ORDER BY patient_id";
 
