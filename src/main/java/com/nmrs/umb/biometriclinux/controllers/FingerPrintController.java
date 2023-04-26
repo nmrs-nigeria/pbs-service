@@ -100,6 +100,61 @@ public class FingerPrintController {
 
     }
 
+    @RequestMapping(value = "api/FingerPrint/PimsCapturePrint")
+    public ResponseEntity<FingerPrintInfo> PimsCapturePrint(@RequestParam int fingerPosition, @RequestParam String verifyOption) {
+        FingerPrintInfo responseObject;
+
+
+        try {
+            responseObject = fingerPrintUtilImpl.capture(fingerPosition, null, false);
+
+            System.out.println("captured");
+
+            if (Objects.isNull(responseObject.getErrorMessage())) {
+
+//                if(verify) {
+//                    if (!bulkVerify) {
+            if(verifyOption.equalsIgnoreCase("facilityverify")) {
+                dbManager.getConnection();
+                System.out.println("getting all fingerprint in the database");
+                List<FingerPrintInfo> allPrevious = dbManager.GetPatientBiometricinfo(0);
+
+                int matchedPatientId = fingerPrintUtilImpl.verify(new FingerPrintMatchInputModel(responseObject.Template, allPrevious));
+
+                if (matchedPatientId != 0) {
+                    String patientName = dbManager.RetrievePatientNameByPersonId(matchedPatientId);
+
+                    String errString = MessageFormat.format("Finger print record already exist for this patient {0} Name : {1} {2} Person Identifier : {3} ",
+                            "\n", patientName, "\n", matchedPatientId);
+                    responseObject.setErrorMessage(errString);
+                }
+            }
+
+//                    }
+//                }
+
+
+            }
+
+            if (responseObject.getErrorMessage() == null)  responseObject.setErrorMessage("");
+
+        } catch (Exception ex) {
+            responseObject = new FingerPrintInfo();
+            responseObject.setErrorMessage(ex.getMessage());
+            logger.log(Logger.Level.FATAL, ex);
+        } finally {
+            try {
+                dbManager.closeConnection();
+            } catch (SQLException ex) {
+                responseObject = new FingerPrintInfo();
+                responseObject.setErrorMessage(ex.getMessage());
+                logger.log(Logger.Level.FATAL, ex);
+            }
+        }
+        return new ResponseEntity<>(responseObject, HttpStatus.OK);
+
+    }
+
     @RequestMapping(value = "api/FingerPrint/reCapturePrint")
     public ResponseEntity<FingerPrintInfo> reCapturePrint(@RequestParam int fingerPosition, @RequestParam String patientId) {
 
