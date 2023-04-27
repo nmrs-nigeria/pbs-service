@@ -342,7 +342,6 @@ public class FingerPrintController {
 
     }
 
-
     @DeleteMapping(value = "api/FingerPrint/deleteFingerPrint")
     public ResponseEntity<?> deleteFingerPrint(@RequestParam String patientId) {
         try {
@@ -355,5 +354,52 @@ public class FingerPrintController {
         }
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
+
+    public ResponseEntity<?> saveRecapturedFingerprintVerificationToDatabase(@RequestBody SaveModel model) {
+        List<FingerPrintInfo> fingerPrint = new ArrayList<>();
+        List<String> prints = new ArrayList<>();
+        ResponseModel responseModel = new ResponseModel();
+        
+        if(model.FingerPrintList.size() < 6){
+            responseModel.setErrorMessage("Biometric must contain 6 or more fingers");
+            responseModel.setIsSuccessful(false);
+            return new ResponseEntity<>(responseModel, HttpStatus.BAD_REQUEST);
+        }
+
+        try {
+            String patientUUID = model.PatientUUID;
+            dbManager.getConnection();
+            Map<String, String> patientInfo = dbManager.RetrievePatientIdAndNameByUUID(patientUUID);
+            if (patientInfo != null) {
+                int pid = Integer.parseInt(patientInfo.get("person_id"));
+                model.getFingerPrintList().forEach(a -> {
+                    a.setPatienId(pid);
+                    a.setCreator(0);
+                    fingerPrint.add(a);
+                    if(a.getTemplate() != null) {
+                        prints.add(a.getTemplate());
+                    }
+                });
+                
+                responseModel = dbManager.saveRecapturedFingerprintVerificationToDatabase(fingerPrint, false);
+                dbManager.closeConnection();
+                return new ResponseEntity<>(responseModel, HttpStatus.OK);
+            } else {
+                responseModel.setErrorMessage("Invalid patientId supplied");
+                responseModel.setIsSuccessful(false);
+                dbManager.closeConnection();
+                return new ResponseEntity<>(responseModel, HttpStatus.BAD_REQUEST);
+            }
+
+        } catch (Exception ex) {
+            responseModel = new ResponseModel();
+            responseModel.setErrorMessage("Error occurrd while performing your request - "+ex.getMessage());
+            responseModel.setIsSuccessful(false);
+            return new ResponseEntity<>(responseModel, HttpStatus.BAD_REQUEST);
+        }
+
+    }
+
+
 
 }

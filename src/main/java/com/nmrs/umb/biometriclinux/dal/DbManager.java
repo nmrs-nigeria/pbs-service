@@ -45,6 +45,7 @@ public class DbManager {
     private PreparedStatement ppStatement = null;
     private ResultSet resultSet = null;
     private final String TABLENAME = "biometricinfo";
+    private final String BIOMETRICVERIFICATIONINFO = "biometricverificationinfo";
 
     Logger logger = Logger.getLogger(DbManager.class);
     
@@ -139,7 +140,7 @@ public class DbManager {
         return null;
 
     }
-
+    
     public Set<Integer> getPatientsWithLowQualityData() throws Exception {
 
         String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template," +
@@ -242,6 +243,7 @@ public class DbManager {
         return fingerInfoList;
         
     }
+    
     private List<Patient> convertToPatientList(ResultSet resultSet) throws SQLException {
 
         List<Patient> patients = new ArrayList<>();
@@ -657,4 +659,105 @@ public class DbManager {
         this.closeConnection();
         return  null;
     }
+    
+    public ResponseModel saveRecapturedFingerprintVerificationToDatabase(List<FingerPrintInfo> fingerPrintList, boolean update) throws Exception {
+        
+        ResponseModel responseModel = new ResponseModel();
+        Connection connection = this.openConnection();
+        
+        if (fingerPrintList.isEmpty()) {
+            responseModel.setIsSuccessful(false);
+            responseModel.setErrorMessage("The request contains an empty list");
+        }
+        
+        try {
+            
+            for (FingerPrintInfo a : fingerPrintList) {
+                if(update){
+                	saveVerification(a, this.GetPatientBiometricVerificationInfo(a.getPatienId(), a.getFingerPositions().name(), connection) != null, connection);
+                }else {
+                	saveVerification(a, false, connection);
+                }
+
+            }
+
+            updatePatientTable(fingerPrintList.get(0).getPatienId());
+            
+            responseModel.setIsSuccessful(true);
+            responseModel.setErrorMessage("Fingerprint Verification Completed Successfully");
+            this.closeConnection();
+        } catch (SQLException ex) {
+            responseModel.setIsSuccessful(false);
+            responseModel.setErrorMessage(ex.getMessage());
+        }finally {
+            this.closeConnection();
+        }
+        
+        return responseModel;
+    }
+
+    public void saveVerification(FingerPrintInfo fingerPrint, boolean update, Connection connection) throws Exception {
+        String sql = "insert into " + BIOMETRICVERIFICATIONINFO + "(patient_Id, imageWidth, imageHeight, imageDPI,  " +
+                "imageQuality, fingerPosition, serialNumber, model, manufacturer, creator, date_created, new_template, template)" +
+                "Values(?,?,?,?,?,?,?,?,?,?,?,?,?)";
+        if(update) {
+            sql = "UPDATE " + BIOMETRICVERIFICATIONINFO + " SET " +
+                    "patient_Id = ?, " +
+                    "imageWidth = ?, " +
+                    "imageHeight = ?, " +
+                    "imageDPI = ?, " +
+                    "imageQuality = ?, " +
+                    "fingerPosition = ?, " +
+                    "serialNumber = ?, " +
+                    "model = ?, " +
+                    "manufacturer = ?, " +
+                    "creator = ?, " +
+                    "date_created = ?, " +
+                    "new_template = ?, " +
+                    "template = ? WHERE patient_id = ? AND fingerPosition = ? ";
+        }
+
+        ppStatement = connection.prepareStatement(sql);
+        ppStatement.setInt(1, fingerPrint.getPatienId());
+        ppStatement.setInt(2, fingerPrint.getImageWidth());
+        ppStatement.setInt(3, fingerPrint.getImageHeight());
+        ppStatement.setInt(4, fingerPrint.getImageDPI());
+        ppStatement.setInt(5, fingerPrint.getImageQuality());
+        ppStatement.setString(6, fingerPrint.getFingerPositions().name());
+        ppStatement.setString(7, fingerPrint.getSerialNumber());
+        ppStatement.setString(8, fingerPrint.getModel());
+        ppStatement.setString(9, fingerPrint.getManufacturer());
+        ppStatement.setInt(10, fingerPrint.getCreator());
+        ppStatement.setDate(11, getDate(fingerPrint.getDateCreated()));
+        ppStatement.setBlob(12, new ByteArrayInputStream(fingerPrint.getTemplate().getBytes()), fingerPrint.getTemplate().getBytes().length);
+        ppStatement.setNull(13, Types.NULL);
+        if(update) {
+            ppStatement.setInt(14, fingerPrint.getPatienId());
+            ppStatement.setString(15, fingerPrint.getFingerPositions().name());
+        }
+        
+        ppStatement.executeUpdate();
+        
+    }
+    
+    public FingerPrintInfo GetPatientBiometricVerificationInfo(int patientId, String fingerPosition, Connection connection) throws Exception {
+        String sql = "SELECT patient_id, COALESCE(template, CONVERT(new_template USING utf8)) as template," +
+                " imageWidth, imageHeight, imageDPI,  imageQuality, fingerPosition, serialNumber, model, " +
+                "manufacturer, date_created, creator FROM " + BIOMETRICVERIFICATIONINFO +" where patient_id = ? AND fingerPosition = ? ";
+
+        ppStatement = connection.prepareStatement(sql);
+        ppStatement.setString(1, String.valueOf(patientId));
+        ppStatement.setString(2, fingerPosition);
+
+        resultSet = ppStatement.executeQuery();
+        List<FingerPrintInfo> fingerInfoList = converToFingerPrintList(resultSet);
+        if (fingerInfoList.size() > 0) return fingerInfoList.get(0);
+        return null;
+
+    }
+    
+    
+    
+    
+    
 }
