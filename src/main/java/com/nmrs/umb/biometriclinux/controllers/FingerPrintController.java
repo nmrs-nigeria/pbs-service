@@ -355,6 +355,7 @@ public class FingerPrintController {
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
+    @RequestMapping(value = "api/FingerPrint/ReSaveFingerprintVerificationToDatabase")
     public ResponseEntity<?> saveRecapturedFingerprintVerificationToDatabase(@RequestBody SaveModel model) {
         List<FingerPrintInfo> fingerPrint = new ArrayList<>();
         List<String> prints = new ArrayList<>();
