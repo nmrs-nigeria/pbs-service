@@ -50,4 +50,26 @@ public class Utils {
         }
         return null;
     }
+    
+    public static String inDbPerPatient(List<FingerPrintInfo> fingerPrint, List<String> prints, int pid, DbManager dbManager, FingerPrintUtilImpl fingerPrintUtil) {
+
+        try {
+            dbManager.getConnection();
+            System.out.println("getting all fingerprint in the database for a patient");
+            List<FingerPrintInfo> allPrevious = dbManager.GetPatientBiometricinfo(pid);
+            int matchedPatientId = fingerPrintUtil.verify(new FingerPrintMatchInputModel(allPrevious, prints));
+            if (matchedPatientId != 0) {
+                String patientName = dbManager.RetrievePatientNameByPersonId(matchedPatientId);
+                return MessageFormat.format("Finger print record already exist for this patient {0} Name : {1} {2} Person Identifier : {3} ",
+                        "\n", patientName, "\n", matchedPatientId);
+            }
+        }catch (Exception ex){
+            logger.log(Logger.Level.FATAL, ex);
+        }
+        return null;
+    }
+
+    
+    
+    
 }

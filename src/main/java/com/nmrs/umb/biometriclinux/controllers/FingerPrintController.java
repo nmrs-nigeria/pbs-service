@@ -381,7 +381,7 @@ public class FingerPrintController {
                         prints.add(a.getTemplate());
                     }
                 });
-                
+              
                 responseModel = dbManager.saveRecapturedFingerprintVerificationToDatabase(fingerPrint, false);
                 dbManager.closeConnection();
                 return new ResponseEntity<>(responseModel, HttpStatus.OK);
@@ -400,6 +400,51 @@ public class FingerPrintController {
         }
 
     }
+    
+    @RequestMapping(value = "api/FingerPrint/verificationCapturePrint")
+    public ResponseEntity<FingerPrintInfo> verificationCapturePrint(@RequestParam int fingerPosition, @RequestParam String patientId) {
+
+        FingerPrintInfo responseObject = fingerPrintUtilImpl.capture(fingerPosition, null, false);
+
+        try {
+            if (responseObject != null && Objects.isNull(responseObject.getErrorMessage())) {
+                  dbManager.getConnection();                 
+                  int pid = Integer.parseInt(patientId);
+                  
+                  List<FingerPrintInfo> allPrevious = dbManager.GetPatientBiometricinfo(pid);
+
+                  int matchedPatientId = fingerPrintUtilImpl.verify(new FingerPrintMatchInputModel(responseObject.Template, allPrevious));
+                        
+                  if (matchedPatientId != 0) {
+                	  String patientName = dbManager.RetrievePatientNameByPersonId(matchedPatientId);
+
+                      String errString = MessageFormat.format("Finger print record already exist for this patient {0} Name : {1} {2} Person Identifier : {3}",
+                                    "\n", patientName, "\n", matchedPatientId);
+                      responseObject.setErrorMessage(errString);
+                  }
+                  
+               
+                if (responseObject.getErrorMessage() == null)  responseObject.setErrorMessage("");
+            }
+
+        } catch (Exception ex) {
+            logger.log(Logger.Level.FATAL, ex);
+            responseObject = new FingerPrintInfo();
+            responseObject.setErrorMessage(ex.getMessage());
+        } finally {
+            try {
+                dbManager.closeConnection();
+            } catch (SQLException ex) {
+                responseObject = new FingerPrintInfo();
+                responseObject.setErrorMessage(ex.getMessage());
+                logger.log(Logger.Level.FATAL, ex);
+            }
+        }
+
+        return new ResponseEntity<>(responseObject, HttpStatus.OK);
+
+    }
+
 
 
 
