@@ -619,10 +619,14 @@ public class DbManager {
         ppStatement.setString(1, UUID);
         resultSet = ppStatement.executeQuery();
         Map<String, String> nameAndPersonMap = new HashMap<>();
+
+        System.out.println("Person UUID inside Db Manager Class "+UUID);
+
         while (resultSet.next()) {
             
             nameAndPersonMap.put("name", resultSet.getString("patient_name"));
             nameAndPersonMap.put("person_id", resultSet.getString("person_id"));
+            System.out.println("Person ID inside Db Manager Class "+resultSet.getString("person_id"));
             break;
         }
         //closeConnection();

@@ -208,9 +208,11 @@ public class FingerPrintController {
         try {
             dbManager.getConnection();
             Map<String, String> patientInfo = dbManager.RetrievePatientIdAndNameByUUID(PatientUUID);
-
+            System.out.println("Patient UUID inside Check previous capture "+PatientUUID);
+            System.out.println("Patient ID inside Check previous capture "+patientInfo.get("person_id"));
             if (patientInfo != null) {
                 fingerPrint = dbManager.GetPatientBiometricinfo(Integer.parseInt(patientInfo.get("person_id")));
+                //System.out.println("Patient fingerPrint inside Check previous capture "+fingerPrint.get(1));
                 dbManager.closeConnection();
                 return new ResponseEntity<>(fingerPrint, HttpStatus.OK);
             }
@@ -405,27 +407,32 @@ public class FingerPrintController {
     public ResponseEntity<FingerPrintInfo> verificationCapturePrint(@RequestParam int fingerPosition, @RequestParam String patientId) {
 
         FingerPrintInfo responseObject = fingerPrintUtilImpl.capture(fingerPosition, null, false);
-
+            System.out.println("verificationCapturePrint");
         try {
-            if (responseObject != null && Objects.isNull(responseObject.getErrorMessage())) {
-                  dbManager.getConnection();                 
-                  int pid = Integer.parseInt(patientId);
-                  
-                  List<FingerPrintInfo> allPrevious = dbManager.GetPatientBiometricinfo(pid);
-
-                  int matchedPatientId = fingerPrintUtilImpl.verify(new FingerPrintMatchInputModel(responseObject.Template, allPrevious));
-                        
-                  if (matchedPatientId != 0) {
-                	  String patientName = dbManager.RetrievePatientNameByPersonId(matchedPatientId);
-
-                      String errString = MessageFormat.format("Finger print record already exist for this patient {0} Name : {1} {2} Person Identifier : {3}",
-                                    "\n", patientName, "\n", matchedPatientId);
-                      responseObject.setErrorMessage(errString);
-                  }
-                  
-               
-                if (responseObject.getErrorMessage() == null)  responseObject.setErrorMessage("");
-            }
+//            if (responseObject != null && Objects.isNull(responseObject.getErrorMessage())) {
+//                  dbManager.getConnection();
+//                Map<String, String> patientInfo = dbManager.RetrievePatientIdAndNameByUUID(patientId);
+//
+//                    int pid = Integer.parseInt(patientInfo.get("person_id"));
+//
+//                    System.out.println("Patient ID "+pid);
+//
+//                  List<FingerPrintInfo> allPrevious = dbManager.GetPatientBiometricinfo(pid);
+//
+//                  int matchedPatientId = fingerPrintUtilImpl.verify(new FingerPrintMatchInputModel(responseObject.Template, allPrevious));
+//
+//                  if (matchedPatientId != 0) {
+//                	  String patientName = dbManager.RetrievePatientNameByPersonId(matchedPatientId);
+//
+//                      String errString = MessageFormat.format("Finger print record already exist for this patient {0} Name : {1} {2} Person Identifier : {3}",
+//                                    "\n", patientName, "\n", matchedPatientId);
+//                     responseObject.setErrorMessage(errString);
+//                     responseObject.setErrorCode("-2");
+//                  }
+//
+//
+//                if (responseObject.getErrorMessage() == null)  responseObject.setErrorMessage("");
+//            }
 
         } catch (Exception ex) {
             logger.log(Logger.Level.FATAL, ex);
