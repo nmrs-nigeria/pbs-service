@@ -409,7 +409,7 @@ public class FingerPrintController {
         FingerPrintInfo responseObject = fingerPrintUtilImpl.capture(fingerPosition, null, false);
             System.out.println("verificationCapturePrint");
         try {
-//            if (responseObject != null && Objects.isNull(responseObject.getErrorMessage())) {
+           if (responseObject != null && Objects.isNull(responseObject.getErrorMessage())) {
 //                  dbManager.getConnection();
 //                Map<String, String> patientInfo = dbManager.RetrievePatientIdAndNameByUUID(patientId);
 //
@@ -429,10 +429,10 @@ public class FingerPrintController {
 //                     responseObject.setErrorMessage(errString);
 //                     responseObject.setErrorCode("-2");
 //                  }
-//
-//
-//                if (responseObject.getErrorMessage() == null)  responseObject.setErrorMessage("");
-//            }
+
+
+              if (responseObject.getErrorMessage() == null)  responseObject.setErrorMessage("");
+           }
 
         } catch (Exception ex) {
             logger.log(Logger.Level.FATAL, ex);

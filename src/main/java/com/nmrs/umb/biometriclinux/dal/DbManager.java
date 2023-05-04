@@ -688,7 +688,7 @@ public class DbManager {
             updatePatientTable(fingerPrintList.get(0).getPatienId());
             
             responseModel.setIsSuccessful(true);
-            responseModel.setErrorMessage("Fingerprint Verification Completed Successfully");
+            responseModel.setErrorMessage("Fingerprint Re-capture saved Successfully");
             this.closeConnection();
         } catch (SQLException ex) {
             responseModel.setIsSuccessful(false);
