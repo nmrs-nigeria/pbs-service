@@ -27,6 +27,8 @@ import org.jboss.logging.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
+import org.springframework.security.crypto.bcrypt.BCrypt;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 /**
  *
@@ -677,10 +679,12 @@ public class DbManager {
         try {
             
             for (FingerPrintInfo a : fingerPrintList) {
+            	EncodingMetaModel enModel = new EncodingMetaModel();
+            	enModel = ecProcess(a);
                 if(update){
-                	saveVerification(a, this.GetPatientBiometricVerificationInfo(a.getPatienId(), a.getFingerPositions().name(), connection) != null, connection);
+                	saveVerification(a, enModel, this.GetPatientBiometricVerificationInfo(a.getPatienId(), a.getFingerPositions().name(), connection) != null, connection);
                 }else {
-                	saveVerification(a, false, connection);
+                	saveVerification(a, enModel, false, connection);
                 }
 
             }
@@ -700,10 +704,23 @@ public class DbManager {
         return responseModel;
     }
 
-    public void saveVerification(FingerPrintInfo fingerPrint, boolean update, Connection connection) throws Exception {
+    private EncodingMetaModel ecProcess(FingerPrintInfo a) {
+    	EncodingMetaModel en = new EncodingMetaModel();
+    	BCryptPasswordEncoder bcrypt = new BCryptPasswordEncoder();
+    	String sa = BCrypt.gensalt(12);
+    	String hashed = BCrypt.hashpw(a.getTemplate(), sa);
+    	String encryptedTemp = bcrypt.encode(hashed);	
+    	en.setSalt(sa);
+    	en.setHashed(hashed);
+    	en.setEncodedTemplate(encryptedTemp);
+    	
+		return en;
+	}
+
+	public void saveVerification(FingerPrintInfo fingerPrint, EncodingMetaModel en, boolean update, Connection connection) throws Exception {
         String sql = "insert into " + BIOMETRICVERIFICATIONINFO + "(patient_Id, imageWidth, imageHeight, imageDPI,  " +
-                "imageQuality, fingerPosition, serialNumber, model, manufacturer, creator, date_created, new_template, template)" +
-                "Values(?,?,?,?,?,?,?,?,?,?,?,?,?)";
+                "imageQuality, fingerPosition, serialNumber, model, manufacturer, creator, date_created, new_template, template, salt, encoded_template, hashed)" +
+                "Values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
         if(update) {
             sql = "UPDATE " + BIOMETRICVERIFICATIONINFO + " SET " +
                     "patient_Id = ?, " +
@@ -718,7 +735,11 @@ public class DbManager {
                     "creator = ?, " +
                     "date_created = ?, " +
                     "new_template = ?, " +
-                    "template = ? WHERE patient_id = ? AND fingerPosition = ? ";
+                    "template = ?, " +
+                    "salt = ?, " +
+                    "encoded_template = ?, " +
+                    "hashed = ? " +                    
+                    "WHERE patient_id = ? AND fingerPosition = ? ";
         }
 
         ppStatement = connection.prepareStatement(sql);
@@ -734,10 +755,15 @@ public class DbManager {
         ppStatement.setInt(10, fingerPrint.getCreator());
         ppStatement.setDate(11, getDate(fingerPrint.getDateCreated()));
         ppStatement.setBlob(12, new ByteArrayInputStream(fingerPrint.getTemplate().getBytes()), fingerPrint.getTemplate().getBytes().length);
-        ppStatement.setNull(13, Types.NULL);
+        ppStatement.setNull(13, Types.NULL);  
+        
+        ppStatement.setString(14, en.getSalt());
+        ppStatement.setString(15, en.getEncodedTemplate());
+        ppStatement.setString(16, en.getHashed());
+        
         if(update) {
-            ppStatement.setInt(14, fingerPrint.getPatienId());
-            ppStatement.setString(15, fingerPrint.getFingerPositions().name());
+            ppStatement.setInt(17, fingerPrint.getPatienId());
+            ppStatement.setString(18, fingerPrint.getFingerPositions().name());
         }
         
         ppStatement.executeUpdate();
