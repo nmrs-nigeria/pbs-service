@@ -709,7 +709,8 @@ public class DbManager {
     private EncodingMetaModel ecProcess(FingerPrintInfo a) {
     	EncodingMetaModel en = new EncodingMetaModel();
     	BCryptPasswordEncoder bcrypt = new BCryptPasswordEncoder();
-    	String sa = BCrypt.gensalt(12);
+    	//String sa = BCrypt.gensalt(12);
+        String sa = "$2a$12$o7Q/zmGmyNUK7VdvtBSRzu";
     	String hashed = BCrypt.hashpw(a.getTemplate(), sa);
     	System.out.println("Hashed: " +hashed);
     	String encryptedTemp = bcrypt.encode(hashed);
