@@ -681,8 +681,10 @@ public class DbManager {
             for (FingerPrintInfo a : fingerPrintList) {
             	EncodingMetaModel enModel = new EncodingMetaModel();
             	enModel = ecProcess(a);
-                if(update){
-                	saveVerification(a, enModel, this.GetPatientBiometricVerificationInfo(a.getPatienId(), a.getFingerPositions().name(), connection) != null, connection);
+
+                if(this.GetPatientBiometricVerificationInfo(a.getPatienId(), a.getFingerPositions().name(), connection) != null){
+
+                	saveVerification(a, enModel, true, connection);
                 }else {
                 	saveVerification(a, enModel, false, connection);
                 }
@@ -709,7 +711,9 @@ public class DbManager {
     	BCryptPasswordEncoder bcrypt = new BCryptPasswordEncoder();
     	String sa = BCrypt.gensalt(12);
     	String hashed = BCrypt.hashpw(a.getTemplate(), sa);
-    	String encryptedTemp = bcrypt.encode(hashed);	
+    	System.out.println("Hashed: " +hashed);
+    	String encryptedTemp = bcrypt.encode(hashed);
+        System.out.println("encryptedTemp: " +encryptedTemp);
     	en.setSalt(sa);
     	en.setHashed(hashed);
     	en.setEncodedTemplate(encryptedTemp);
@@ -738,7 +742,8 @@ public class DbManager {
                     "template = ?, " +
                     "salt = ?, " +
                     "encoded_template = ?, " +
-                    "hashed = ? " +                    
+                    "hashed = ?, " +
+                    "recapture_count = recapture_count + 1 " +
                     "WHERE patient_id = ? AND fingerPosition = ? ";
         }
 
