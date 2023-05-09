@@ -724,8 +724,8 @@ public class DbManager {
 
 	public void saveVerification(FingerPrintInfo fingerPrint, EncodingMetaModel en, boolean update, Connection connection) throws Exception {
         String sql = "insert into " + BIOMETRICVERIFICATIONINFO + "(patient_Id, imageWidth, imageHeight, imageDPI,  " +
-                "imageQuality, fingerPosition, serialNumber, model, manufacturer, creator, date_created, new_template, template, salt, encoded_template, hashed)" +
-                "Values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+                "imageQuality, fingerPosition, serialNumber, model, manufacturer, creator, date_created, new_template, template, encoded_template, hashed)" +
+                "Values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
         if(update) {
             sql = "UPDATE " + BIOMETRICVERIFICATIONINFO + " SET " +
                     "patient_Id = ?, " +
@@ -741,7 +741,6 @@ public class DbManager {
                     "date_created = ?, " +
                     "new_template = ?, " +
                     "template = ?, " +
-                    "salt = ?, " +
                     "encoded_template = ?, " +
                     "hashed = ?, " +
                     "recapture_count = recapture_count + 1 " +
@@ -763,13 +762,13 @@ public class DbManager {
         ppStatement.setBlob(12, new ByteArrayInputStream(fingerPrint.getTemplate().getBytes()), fingerPrint.getTemplate().getBytes().length);
         ppStatement.setNull(13, Types.NULL);  
         
-        ppStatement.setString(14, en.getSalt());
-        ppStatement.setString(15, en.getEncodedTemplate());
-        ppStatement.setString(16, en.getHashed());
+      //  ppStatement.setString(14, en.getSalt());
+        ppStatement.setString(14, en.getEncodedTemplate());
+        ppStatement.setString(15, en.getHashed());
         
         if(update) {
-            ppStatement.setInt(17, fingerPrint.getPatienId());
-            ppStatement.setString(18, fingerPrint.getFingerPositions().name());
+            ppStatement.setInt(16, fingerPrint.getPatienId());
+            ppStatement.setString(17, fingerPrint.getFingerPositions().name());
         }
         
         ppStatement.executeUpdate();
