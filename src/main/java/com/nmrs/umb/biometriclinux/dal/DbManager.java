@@ -41,6 +41,8 @@ public class DbManager {
     Environment env;
     @Autowired
     FingerPrintUtilImpl fingerPrintUtilImpl;
+
+    Integer last_inserted_id = 0;
     
     private Connection conn = null;
     private Statement statement = null;
@@ -50,7 +52,10 @@ public class DbManager {
     private final String BIOMETRICVERIFICATIONINFO = "biometricverificationinfo";
 
     Logger logger = Logger.getLogger(DbManager.class);
-    
+    private PreparedStatement ppStatement_audit_trail;
+    private PreparedStatement ppStatement_updatedid;
+    private ResultSet resultSet_updatedid;
+
     public Connection openConnection() throws ClassNotFoundException, SQLException {
         String server = env.getProperty("app.server");
         String dbName = env.getProperty("app.dbname");
@@ -726,6 +731,7 @@ public class DbManager {
         String sql = "insert into " + BIOMETRICVERIFICATIONINFO + "(patient_Id, imageWidth, imageHeight, imageDPI,  " +
                 "imageQuality, fingerPosition, serialNumber, model, manufacturer, creator, date_created, new_template, template, encoded_template, hashed)" +
                 "Values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+        String updatedid ="select biometricInfo_Id from biometricverificationinfo where patient_id = ?";
         if(update) {
             sql = "UPDATE " + BIOMETRICVERIFICATIONINFO + " SET " +
                     "patient_Id = ?, " +
@@ -769,10 +775,32 @@ public class DbManager {
         if(update) {
             ppStatement.setInt(16, fingerPrint.getPatienId());
             ppStatement.setString(17, fingerPrint.getFingerPositions().name());
+
         }
-        
+
         ppStatement.executeUpdate();
-        
+
+//        if(update){
+//            ppStatement_updatedid = connection.prepareStatement(updatedid);
+//            ppStatement_updatedid.setInt(1, fingerPrint.getPatienId());
+//            resultSet_updatedid = ppStatement_updatedid.executeQuery();
+//            if(resultSet_updatedid.next()){
+//                last_inserted_id = resultSet_updatedid.getInt(1);
+//            }
+//        }else{
+//            ResultSet rs = ppStatement.getGeneratedKeys();
+//            if(rs.next())
+//            {
+//                last_inserted_id = rs.getInt(1);
+//            }
+//        }
+
+//        String audit_trail = "insert into biometricverificationinfo_audit biometricInfo_Id, patient_id,audit_date values(?,?,NOW())";
+//        ppStatement_audit_trail = connection.prepareStatement(audit_trail);
+//        ppStatement_audit_trail.setInt(1, last_inserted_id);
+//        ppStatement_audit_trail.setInt(2, fingerPrint.getPatienId());
+//        ppStatement_audit_trail.executeUpdate();
+
     }
     
     public FingerPrintInfo GetPatientBiometricVerificationInfo(int patientId, String fingerPosition, Connection connection) throws Exception {
@@ -790,9 +818,21 @@ public class DbManager {
         return null;
 
     }
-    
-    
-    
-    
+
+
+
+    public int getRecaptureCountPatient(String patientid) throws Exception {
+        System.out.println("patientid: " +patientid);
+       int count=0;
+        ppStatement = getConnection().prepareStatement("select recapture_count from biometricverificationinfo where patient_Id = ?");
+        ppStatement.setString(1, patientid);
+
+        resultSet = ppStatement.executeQuery();
+
+        if(resultSet.next()){
+            count = Integer.parseInt(resultSet.getString("recapture_count"));
+        }
+        return count;
+    }
     
 }

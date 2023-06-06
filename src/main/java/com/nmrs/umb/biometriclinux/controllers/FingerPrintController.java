@@ -6,6 +6,7 @@
 package com.nmrs.umb.biometriclinux.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.gson.Gson;
 import com.nmrs.umb.biometriclinux.dal.DbManager;
 import com.nmrs.umb.biometriclinux.main.FingerPrintUtilImpl;
 import com.nmrs.umb.biometriclinux.models.FingerPrintInfo;
@@ -50,6 +51,9 @@ public class FingerPrintController {
 
     @Value("${verify:false}")
     boolean verify;
+
+    Gson gson = new Gson();
+    String countFP ="0";
 
     @RequestMapping(value = "api/FingerPrint/CapturePrint")
     public ResponseEntity<FingerPrintInfo> CapturePrint(@RequestParam int fingerPosition) {
@@ -202,6 +206,7 @@ public class FingerPrintController {
     @RequestMapping(value = "api/FingerPrint/CheckForPreviousCapture")
     public ResponseEntity<?> CheckForPreviousCapture(@RequestParam String PatientUUID) {
         List<FingerPrintInfo> fingerPrint;
+        FingerPrintInfo fingerPrint2 = new FingerPrintInfo();
         if (Objects.isNull(PatientUUID) || PatientUUID.equals("undefined")) {
             return new ResponseEntity("Invalid Patient Id", HttpStatus.BAD_REQUEST);
         }
@@ -211,8 +216,10 @@ public class FingerPrintController {
             System.out.println("Patient UUID inside Check previous capture "+PatientUUID);
             System.out.println("Patient ID inside Check previous capture "+patientInfo.get("person_id"));
             if (patientInfo != null) {
+               countFP = String.valueOf(dbManager.getRecaptureCountPatient(patientInfo.get("person_id")));
                 fingerPrint = dbManager.GetPatientBiometricinfo(Integer.parseInt(patientInfo.get("person_id")));
                 //System.out.println("Patient fingerPrint inside Check previous capture "+fingerPrint.get(1));
+
                 dbManager.closeConnection();
                 return new ResponseEntity<>(fingerPrint, HttpStatus.OK);
             }
@@ -453,6 +460,31 @@ public class FingerPrintController {
     }
 
 
+@RequestMapping(value = "api/FingerPrint/recaptureCount")
+public String recaptureCount(){
+
+    return  gson.toJson(countFP);
+}
+
+    @RequestMapping(value = "api/FingerPrint/recaptureCountOnDashBoard")
+    public String recaptureCountOnDashBoard(@RequestParam String PatientUUID){
+        try {
+            dbManager.getConnection();
+            Map<String, String> patientInfo = dbManager.RetrievePatientIdAndNameByUUID(PatientUUID);
+            System.out.println("Patient UUID inside Check previous capture "+PatientUUID);
+            System.out.println("Patient ID inside Check previous capture "+patientInfo.get("person_id"));
+            if (patientInfo != null) {
+                countFP = String.valueOf(dbManager.getRecaptureCountPatient(patientInfo.get("person_id")));
+                //System.out.println("Patient fingerPrint inside Check previous capture "+fingerPrint.get(1));
+
+                dbManager.closeConnection();
+            }
+
+        } catch (Exception ex) {
+            logger.log(Logger.Level.FATAL, ex.getMessage());
+        }
+        return  gson.toJson(countFP);
+    }
 
 
 }
